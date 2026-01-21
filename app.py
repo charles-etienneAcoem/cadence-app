@@ -3,135 +3,126 @@ import requests
 import pandas as pd
 import plotly.express as px
 from datetime import datetime, date
-import json
 
-# --- CONFIGURATION (Doit être la 1ère ligne) ---
-st.set_page_config(page_title="Cadence Debugger", page_icon="🐞", layout="wide")
-st.title("🐞 Cadence : Mode DEBUG")
+# --- CONFIGURATION ---
+st.set_page_config(page_title="Cadence Viewer Final", page_icon="✅", layout="wide")
+st.title("✅ Cadence : Visualiseur de Données")
 
 # --- SIDEBAR ---
 with st.sidebar:
-    st.header("1. Paramètres")
-    # Case à cocher pour tout afficher
-    debug_mode = st.checkbox("🛠️ ACTIVER LE MODE DEBUG", value=True)
-    
+    st.header("🔐 Authentification")
     api_key = st.text_input("Clé API", type="password")
     
     st.divider()
-    st.header("2. Cibles")
-    project_id = st.number_input("ID Projet", value=1931, step=1)
-    mps_input = st.text_input("IDs Points (séparés par virgule)", value="3440, 3441")
+    st.header("🎯 Cibles")
+    # J'ai mis par défaut les IDs trouvés dans ton JSON (Projet 689, Point 1797)
+    project_id = st.number_input("ID Projet", value=689, step=1) 
+    mps_input = st.text_input("IDs Points", value="1797", help="Pour plusieurs points : 1797, 1798")
     
     st.divider()
-    st.header("3. Dates")
-    d_start = st.date_input("Début", date(2025, 1, 21))
+    st.header("📅 Période & Données")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        use_1h = st.checkbox("1h (Hourly)", True)
+    with col2:
+        use_15m = st.checkbox("15min", False)
+        
+    d_start = st.date_input("Début", date(2025, 1, 21)) # Date de ton JSON
     d_end = st.date_input("Fin", date.today())
     
-    btn_run = st.button("🚀 LANCER LA REQUÊTE", type="primary")
+    btn_run = st.button("🚀 AFFICHER LES DONNÉES", type="primary")
 
-# --- FONCTION PRINCIPALE ---
+# --- FONCTION DE TRAITEMENT ---
+def process_cadence_response(json_data, suffix):
+    """Transforme le JSON complexe de Cadence en DataFrame simple"""
+    try:
+        if not json_data.get('timeStamp'):
+            return None
+        
+        # 1. Les Dates
+        df = pd.DataFrame({'Date': pd.to_datetime(json_data['timeStamp'])})
+        
+        # 2. Les Indicateurs
+        if 'indicators' in json_data:
+            for item in json_data['indicators']:
+                # Nom du point
+                mp_info = item.get('measurementPoint', {})
+                mp_name = mp_info.get('measurementPointName', str(item.get('measurementPointId')))
+                data_type = item.get('indicatorDescription', {}).get('primaryData', 'Value')
+                
+                # Nom de la colonne
+                col_name = f"{mp_name} | {data_type} ({suffix})"
+                
+                # Extraction des valeurs (Gestion du [[...]] vs [...])
+                raw_values = item.get('data', {}).get('values')
+                
+                if raw_values:
+                    # Si c'est une liste de liste [[v1, v2]], on prend la première
+                    if isinstance(raw_values, list) and len(raw_values) > 0 and isinstance(raw_values[0], list):
+                        clean_values = raw_values[0]
+                    else:
+                        clean_values = raw_values
+                    
+                    # Vérification taille
+                    if len(clean_values) == len(df):
+                        df[col_name] = clean_values
+                    else:
+                        st.warning(f"Attention : Décalage de taille pour {col_name}")
+        
+        df.set_index('Date', inplace=True)
+        return df
+    except Exception as e:
+        st.error(f"Erreur de lecture du JSON : {e}")
+        return None
+
+# --- MAIN ---
 if btn_run:
     if not api_key:
-        st.error("⚠️ Il manque la Clé API.")
+        st.error("Il manque la clé API.")
         st.stop()
         
-    # Nettoyage des IDs
+    # Nettoyage IDs
     try:
         mp_ids = [int(x.strip()) for x in mps_input.split(",") if x.strip()]
     except:
-        st.error("Erreur de format dans les IDs des points.")
+        st.error("Format des IDs incorrect.")
         st.stop()
 
-    # Configuration de base
-    url = f"https://cadence.acoem.com/cloud-api/v1/projects/{project_id}/data"
     headers = {
         "accept": "application/json",
         "Content-Type": "application/json",
         "X-API-KEY": api_key
     }
+    url = f"https://cadence.acoem.com/cloud-api/v1/projects/{project_id}/data"
     
     start_iso = f"{d_start}T00:00:00Z"
     end_iso = f"{d_end}T23:59:59Z"
-
-    # --- CONSTRUCTION DU PAYLOAD (INDICATEURS) ---
-    # On teste une requête simple pour commencer : LAeq 1h
-    # C'est souvent là que ça bloque
     
-    indicators_list = []
-    for mp in mp_ids:
-        indicators_list.append({
-            "measurementPointId": mp,
-            "primaryData": "LAeq",
-            "timeFrequency": "global",
-            "frequencyBand": None,      # On tente le None (null) explicite
-            "aggregationMethod": "average",
-            "axis": None,               # On tente le None (null) explicite
-            "precision": 1
-        })
+    dfs = []
 
-    payload = {
-        "start": start_iso,
-        "end": end_iso,
-        "aggregationTime": 3600, # 1 heure
-        "indicators": indicators_list
-    }
-
-    # --- AFFICHAGE DEBUG AVANT ENVOI ---
-    if debug_mode:
-        st.markdown("### 📤 1. Ce qu'on envoie (Payload)")
-        st.code(json.dumps(payload, indent=4), language='json')
-        st.info(f"URL ciblée : {url}")
-
-    # --- ENVOI DE LA REQUÊTE ---
-    with st.spinner("Communication avec le serveur..."):
-        try:
-            r = requests.post(url, headers=headers, json=payload)
+    # --- REQUÊTE 1H ---
+    if use_1h:
+        indicators_1h = []
+        for mp in mp_ids:
+            # Construction stricte comme AppScript
+            indicators_1h.append({
+                "measurementPointId": mp,
+                "primaryData": "LAeq",
+                "timeFrequency": "global",
+                "frequencyBand": None,
+                "aggregationMethod": "average",
+                "axis": None,
+                "precision": 1
+            })
             
-            # --- AFFICHAGE DEBUG APRÈS RÉCEPTION ---
-            if debug_mode:
-                st.markdown(f"### 📥 2. Ce que Cadence répond (Status {r.status_code})")
-                st.text(f"Status Code : {r.status_code}")
-                st.text("Corps de la réponse brute :")
-                st.code(r.text) # Affiche le texte brut même si ce n'est pas du JSON valide
-            
-            # --- ANALYSE ---
-            if r.status_code == 200:
-                st.success("✅ SUCCÈS : Connexion établie !")
-                data = r.json()
-                
-                # Vérification du contenu
-                if data.get('timestamp'):
-                    nb_points = len(data['timestamp'])
-                    st.write(f"Nombre de points temporels reçus : {nb_points}")
-                    
-                    # Création DataFrame rapide
-                    df = pd.DataFrame({'Date': pd.to_datetime(data['timestamp'])})
-                    has_val = False
-                    for item in data.get('indicators', []):
-                        col = f"MP {item['measurementPointId']} ({item['primaryData']})"
-                        vals = item.get('data', {}).get('values')
-                        if vals:
-                            df[col] = vals
-                            has_val = True
-                    
-                    if has_val:
-                        st.dataframe(df)
-                    else:
-                        st.warning("Structure reçue mais valeurs vides (null).")
-                else:
-                    st.warning("Réponse 200 OK, mais pas de timestamps (Liste vide ?).")
-                    
-            elif r.status_code == 400:
-                st.error("❌ ERREUR 400 : Bad Request.")
-                st.markdown("Cela veut dire que le JSON est mal formé ou qu'un paramètre (date, ID) est invalide.")
-            elif r.status_code == 401:
-                st.error("❌ ERREUR 401 : Unauthorized.")
-                st.markdown("Clé API invalide ou expirée.")
-            elif r.status_code == 403:
-                st.error("❌ ERREUR 403 : Forbidden.")
-                st.markdown("La clé est bonne, mais elle n'a pas le droit d'accéder à ce Projet ID.")
-            else:
-                st.error(f"❌ Erreur inattendue : {r.status_code}")
-
-        except Exception as e:
-            st.error(f"❌ CRASH DU SCRIPT : {e}")
+        payload_1h = {
+            "start": start_iso, "end": end_iso, "aggregationTime": 3600,
+            "indicators": indicators_1h
+        }
+        
+        with st.spinner("Chargement données 1h..."):
+            try:
+                r = requests.post(url, headers=headers, json=payload_1h)
+                if r.status_code == 200:
+                    df_1h = process_cadence_response
