@@ -105,4 +105,33 @@ if btn_run:
                     st.write(f"Nombre de points temporels reçus : {nb_points}")
                     
                     # Création DataFrame rapide
-                    df
+                    df = pd.DataFrame({'Date': pd.to_datetime(data['timestamp'])})
+                    has_val = False
+                    for item in data.get('indicators', []):
+                        col = f"MP {item['measurementPointId']} ({item['primaryData']})"
+                        vals = item.get('data', {}).get('values')
+                        if vals:
+                            df[col] = vals
+                            has_val = True
+                    
+                    if has_val:
+                        st.dataframe(df)
+                    else:
+                        st.warning("Structure reçue mais valeurs vides (null).")
+                else:
+                    st.warning("Réponse 200 OK, mais pas de timestamps (Liste vide ?).")
+                    
+            elif r.status_code == 400:
+                st.error("❌ ERREUR 400 : Bad Request.")
+                st.markdown("Cela veut dire que le JSON est mal formé ou qu'un paramètre (date, ID) est invalide.")
+            elif r.status_code == 401:
+                st.error("❌ ERREUR 401 : Unauthorized.")
+                st.markdown("Clé API invalide ou expirée.")
+            elif r.status_code == 403:
+                st.error("❌ ERREUR 403 : Forbidden.")
+                st.markdown("La clé est bonne, mais elle n'a pas le droit d'accéder à ce Projet ID.")
+            else:
+                st.error(f"❌ Erreur inattendue : {r.status_code}")
+
+        except Exception as e:
+            st.error(f"❌ CRASH DU SCRIPT : {e}")
