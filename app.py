@@ -125,4 +125,83 @@ if btn_run:
             try:
                 r = requests.post(url, headers=headers, json=payload_1h)
                 if r.status_code == 200:
-                    df_1h = process_cadence_response
+                    df_1h = process_cadence_response(r.json(), "1h")
+                    if df_1h is not None: dfs.append(df_1h)
+                else:
+                    st.error(f"Erreur 1h : {r.status_code}")
+            except Exception as e:
+                st.error(str(e))
+
+    # --- REQUÊTE 15 MIN ---
+    if use_15m:
+        indicators_15 = []
+        for mp in mp_ids:
+            indicators_15.append({
+                "measurementPointId": mp,
+                "primaryData": "LAeq",
+                "timeFrequency": "global",
+                "frequencyBand": None,
+                "aggregationMethod": "average",
+                "axis": None,
+                "precision": 1
+            })
+            
+        payload_15 = {
+            "start": start_iso, "end": end_iso, "aggregationTime": 900,
+            "indicators": indicators_15
+        }
+        
+        with st.spinner("Chargement données 15min..."):
+            try:
+                r2 = requests.post(url, headers=headers, json=payload_15)
+                if r2.status_code == 200:
+                    df_15 = process_cadence_response(r2.json(), "15m")
+                    if df_15 is not None: dfs.append(df_15)
+                else:
+                    st.error(f"Erreur 15m : {r2.status_code}")
+            except Exception as e:
+                st.error(str(e))
+
+    # --- AFFICHAGE FINAL ---
+    if dfs:
+        # Fusion
+        final_df = dfs[0]
+        for d in dfs[1:]:
+            final_df = final_df.join(d, how='outer')
+        
+        final_df.reset_index(inplace=True)
+        final_df.sort_values('Date', inplace=True)
+        
+        # Info Projet (Basé sur le JSON reçu)
+        st.success(f"Données récupérées pour {len(final_df)} points temporels.")
+        
+        # 1. Graphique
+        st.markdown("### 📈 Courbes de niveaux")
+        fig = px.line(final_df, x='Date', y=final_df.columns[1:], height=600)
+        # Amélioration visuelle
+        fig.update_layout(
+            hovermode="x unified", 
+            legend=dict(orientation="h", y=1.1, title="Capteurs"),
+            yaxis_title="Niveau (dB)"
+        )
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # 2. Tableau & Export
+        st.divider()
+        c1, c2 = st.columns([3, 1])
+        with c1:
+            st.markdown("### 📋 Tableau de données")
+            st.dataframe(final_df, use_container_width=True, height=400)
+        with c2:
+            st.markdown("### 📥 Télécharger")
+            csv = final_df.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="Télécharger CSV",
+                data=csv,
+                file_name=f"Cadence_Export_{project_id}.csv",
+                mime="text/csv",
+                type="primary"
+            )
+            
+    else:
+        st.warning("Aucune donnée n'a pu être affichée.")
