@@ -182,3 +182,35 @@ if st.session_state['df_1h'] is not None or st.session_state['df_15m'] is not No
             x_max = datetime.combine(d_end + timedelta(days=1), time.min)
             
             fig.update_layout(
+                title=f"Evolution {title_suffix}", xaxis_title="Time", yaxis_title="Level (dB)",
+                xaxis=dict(range=[x_min, x_max]), height=500,
+                margin=dict(l=20, r=20, t=40, b=20),
+                template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                legend=dict(orientation="h", y=1.1), hovermode="x unified"
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+        with col_table:
+            st.markdown(f"**Data Table** ({len(df)} rows)")
+            csv = df.to_csv().encode('utf-8')
+            
+            # --- CORRECTION DE L'ERREUR ICI ---
+            # On ajoute 'key' pour que chaque bouton soit unique
+            unique_key = f"dl_btn_{title_suffix}"
+            
+            st.download_button(
+                label="📥 CSV Export",
+                data=csv,
+                file_name=f"Cadence_{title_suffix}_{project_id}.csv",
+                mime="text/csv",
+                key=unique_key, # La clé unique qui sauve la mise !
+                type="primary",
+                use_container_width=True
+            )
+            st.dataframe(df, height=450, use_container_width=True)
+
+    with t1: render_dashboard(st.session_state['df_1h'], "1h")
+    with t2: render_dashboard(st.session_state['df_15m'], "15min")
+
+else:
+    st.info("👈 Open the sections in the sidebar to configure and load data.")
