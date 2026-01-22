@@ -170,3 +170,97 @@ if btn_run:
 
 # --- VISUALIZATION (TABS ARCHITECTURE) ---
 if st.session_state['df_1h'] is not None or st.session_state['df_15m'] is not None:
+    
+    # Create the Tabs
+    tab1, tab2 = st.tabs(["🕒 Hourly Data (1h)", "⏱️ Short Data (15min)"])
+    
+    # --- TAB 1: HOURLY ---
+    with tab1:
+        if st.session_state['df_1h'] is not None:
+            df = st.session_state['df_1h']
+            
+            # 1. GRAPH
+            fig = go.Figure()
+            colors = itertools.cycle(ACOEM_COLORS)
+            
+            for col in df.columns:
+                fig.add_trace(go.Scatter(
+                    x=df.index, y=df[col],
+                    mode='lines', # Clean lines (no markers)
+                    name=col,
+                    line=dict(width=2, color=next(colors))
+                ))
+            
+            # Force X Axis Range to stick to user selection (visual comfort)
+            # Adding a small buffer of minutes to avoid cutting the line on edges
+            x_min = datetime.combine(d_start, datetime.min.time())
+            x_max = datetime.combine(d_end, datetime.max.time())
+
+            fig.update_layout(
+                title=f"Hourly Evolution - Project {project_id}",
+                xaxis_title="Time", yaxis_title="dB",
+                xaxis_range=[x_min, x_max], # FORCE RANGE
+                height=500, hovermode="x unified",
+                template="plotly_dark",
+                paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                legend=dict(orientation="h", y=1.1)
+            )
+            st.plotly_chart(fig, use_container_width=True)
+            
+            st.divider()
+            
+            # 2. EXPORT & TABLE
+            col_btn, col_txt = st.columns([1, 4])
+            csv = df.to_csv().encode('utf-8')
+            col_btn.download_button(
+                "📥 Download CSV (1h)", csv, f"Cadence_1h_{project_id}.csv", "text/csv", type="primary"
+            )
+            st.dataframe(df, use_container_width=True)
+            
+        else:
+            st.info("No Hourly Data requested or found.")
+
+    # --- TAB 2: 15 MIN ---
+    with tab2:
+        if st.session_state['df_15m'] is not None:
+            df = st.session_state['df_15m']
+            
+            # 1. GRAPH
+            fig = go.Figure()
+            colors = itertools.cycle(ACOEM_COLORS) # Reset colors
+            
+            for col in df.columns:
+                fig.add_trace(go.Scatter(
+                    x=df.index, y=df[col],
+                    mode='lines',
+                    name=col,
+                    line=dict(width=2, color=next(colors))
+                ))
+            
+            # Force Range
+            x_min = datetime.combine(d_start, datetime.min.time())
+            x_max = datetime.combine(d_end, datetime.max.time())
+            
+            fig.update_layout(
+                title=f"15min Evolution - Project {project_id}",
+                xaxis_title="Time", yaxis_title="dB",
+                xaxis_range=[x_min, x_max], # FORCE RANGE
+                height=500, hovermode="x unified",
+                template="plotly_dark",
+                paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                legend=dict(orientation="h", y=1.1)
+            )
+            st.plotly_chart(fig, use_container_width=True)
+            
+            st.divider()
+            
+            # 2. EXPORT & TABLE
+            col_btn, col_txt = st.columns([1, 4])
+            csv = df.to_csv().encode('utf-8')
+            col_btn.download_button(
+                "📥 Download CSV (15m)", csv, f"Cadence_15m_{project_id}.csv", "text/csv", type="primary"
+            )
+            st.dataframe(df, use_container_width=True)
+            
+        else:
+            st.info("No 15min Data requested or found.")
