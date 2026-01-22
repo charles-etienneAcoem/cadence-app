@@ -29,14 +29,12 @@ with st.sidebar:
     
     st.header("3. Settings")
     
-    # Checkboxes for aggregation
     col_c1, col_c2 = st.columns(2)
     with col_c1:
         use_1h = st.checkbox("1h Data", value=True)
     with col_c2:
         use_15m = st.checkbox("15min Data", value=True)
         
-    # Date selection
     d_start = st.date_input("Start Date", date(2025, 1, 21))
     d_end = st.date_input("End Date", date.today())
     
@@ -143,7 +141,7 @@ if btn_run:
         with st.spinner("Fetching 15min Data..."):
             st.session_state['df_15m'] = get_cadence_data(api_key, project_id, mp_ids_list, d_start, d_end, 900, "15m")
 
-# --- VISUALIZATION (TABS ARCHITECTURE) ---
+# --- VISUALIZATION ---
 if st.session_state['df_1h'] is not None or st.session_state['df_15m'] is not None:
     
     # Create the Tabs
@@ -156,16 +154,14 @@ if st.session_state['df_1h'] is not None or st.session_state['df_15m'] is not No
             
             # 1. GRAPH
             fig = go.Figure()
-            # Color cycle iterator
             colors = itertools.cycle(ACOEM_COLORS)
             
             for col in df.columns:
                 fig.add_trace(go.Scatter(
                     x=df.index, y=df[col],
-                    mode='lines+markers',
+                    mode='lines', # PLUS DE MARQUEURS (Juste la ligne)
                     name=col,
-                    line=dict(width=3, color=next(colors)),
-                    marker=dict(size=6)
+                    line=dict(width=2, color=next(colors)) # TRAIT PLUS FIN (2px)
                 ))
             
             fig.update_layout(
@@ -205,7 +201,7 @@ if st.session_state['df_1h'] is not None or st.session_state['df_15m'] is not No
                     x=df.index, y=df[col],
                     mode='lines',
                     name=col,
-                    line=dict(width=2, color=next(colors))
+                    line=dict(width=2, color=next(colors)) # TRAIT FIN (2px)
                 ))
             
             fig.update_layout(
