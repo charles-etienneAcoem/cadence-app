@@ -4,50 +4,62 @@ import pandas as pd
 import plotly.graph_objects as go
 from datetime import datetime, date
 
-# --- CONFIGURATION PAGE ---
-st.set_page_config(page_title="Cadence Corrected", page_icon="✅", layout="wide")
-st.title("✅ Cadence : Extraction & Comparaison (Code Corrigé)")
+# --- PAGE CONFIGURATION ---
+# Dark mode is default in Streamlit if the user's OS is dark, 
+# or can be forced in settings. We use a wide layout.
+st.set_page_config(page_title="Cadence Data Extractor", page_icon="🌍", layout="wide")
 
-# --- STATE ---
+st.title("🌍 Get Aggregated Data")
+st.markdown("### Acoem Cadence Interface")
+
+# --- SESSION STATE INITIALIZATION ---
 if 'df_1h' not in st.session_state: st.session_state['df_1h'] = None
 if 'df_15m' not in st.session_state: st.session_state['df_15m'] = None
 
-# --- SIDEBAR ---
+# --- SIDEBAR: SETTINGS ---
 with st.sidebar:
-    st.header("1. Authentification")
-    api_key = st.text_input("Clé API", type="password")
+    st.header("1. Authentication")
+    api_key = st.text_input("API Key", type="password", help="Starts with EZfX...")
     
     st.divider()
     
-    st.header("2. Mode Manuel")
-    # On reprend les valeurs de ton JSON pour tester direct
-    project_id = st.number_input("ID Projet", value=689, step=1)
-    mps_input = st.text_input("IDs Points", value="1797", help="Ex: 1797, 1798")
+    st.header("2. Target (Manual Mode)")
+    # Default values from your project
+    project_id = st.number_input("Project ID", value=689, step=1)
+    mps_input = st.text_input("Measurement Point IDs", value="1797", help="e.g.: 1797, 1798")
     
     st.divider()
     
     st.header("3. Configuration")
-    use_1h = st.checkbox("1h (LAeq + Max)", value=True)
-    use_15m = st.checkbox("15min (LAeq)", value=True)
+    st.caption("Data aggregation:")
+    use_1h = st.checkbox("Hourly Data (1h)", value=True, help="LAeq + LAFMax")
+    use_15m = st.checkbox("Short Data (15min)", value=True, help="LAeq only")
     
-    d_start = st.date_input("Début", date(2025, 1, 21))
-    d_end = st.date_input("Fin", date.today())
+    st.caption("Time Range:")
+    d_start = st.date_input("Start Date", date(2025, 1, 21))
+    d_end = st.date_input("End Date", date.today())
     
     st.divider()
-    btn_run = st.button("🚀 Lancer l'analyse", type="primary")
-
-# --- FONCTION DE TRAITEMENT ROBUSTE ---
-def get_cadence_data(api_key, proj_id, mp_ids, start, end, agg_time, suffix):
     
-    # 1. Payload AppScript Strict
+    # Primary button (often red/orange by default, but distinct)
+    btn_run = st.button("🚀 GET DATA", type="primary")
+
+# --- CORE FUNCTION: DATA FETCHING ---
+def get_cadence_data(api_key, proj_id, mp_ids, start, end, agg_time, suffix):
+    """
+    Fetches data from Cadence Cloud API.
+    Handles nested JSON structures robustly.
+    """
+    
+    # 1. Build Payload (Strict AppScript format)
     indicators = []
     for mp in mp_ids:
-        # LAeq
+        # LAeq (Base for both)
         indicators.append({
             "measurementPointId": mp, "primaryData": "LAeq", "aggregationMethod": "average",
             "timeFrequency": "global", "frequencyBand": None, "axis": None, "precision": 1
         })
-        # Max (uniquement pour 1h pour alléger)
+        # Add Max only for Hourly to keep it clean
         if agg_time == 3600:
             indicators.append({
                 "measurementPointId": mp, "primaryData": "LAFMax", "aggregationMethod": "max",
@@ -69,30 +81,27 @@ def get_cadence_data(api_key, proj_id, mp_ids, start, end, agg_time, suffix):
             data = r.json()
             if not data.get('timeStamp'): return None
             
-            # DataFrame Base
+            # Create Base DataFrame
             df = pd.DataFrame({'Date': pd.to_datetime(data['timeStamp'])})
             
-            # --- BOUCLE DE PARSING CORRIGÉE ---
+            # Parse Indicators
             for item in data.get('indicators', []):
                 
-                # 1. RECUPERATION ROBUSTE DE L'ID ET DU NOM
-                # C'est ici que ça plantait. On vérifie la structure.
+                # A. Robust ID/Name Extraction
                 mp_id = "Unknown"
                 mp_name = "Unknown"
                 
-                # Cas A : Structure imbriquée (Ton JSON)
+                # Check for nested object (New API format)
                 if 'measurementPoint' in item:
                     mp_obj = item['measurementPoint']
                     mp_id = mp_obj.get('measurementPointId')
                     mp_name = mp_obj.get('measurementPointName', str(mp_id))
-                
-                # Cas B : Structure plate (Ancienne API ou autre endpoint)
+                # Check for flat object (Old API format)
                 elif 'measurementPointId' in item:
                     mp_id = item['measurementPointId']
                     mp_name = str(mp_id)
                 
-                # 2. Type de donnée
-                # Parfois c'est dans indicatorDescription, parfois à la racine
+                # B. Data Type
                 dtype = "Val"
                 if 'indicatorDescription' in item:
                     dtype = item['indicatorDescription'].get('primaryData', 'Val')
@@ -101,13 +110,13 @@ def get_cadence_data(api_key, proj_id, mp_ids, start, end, agg_time, suffix):
 
                 col_name = f"{mp_name} | {dtype}"
                 
-                # 3. VALEURS (Gestion liste imbriquée [[v]])
+                # C. Value Extraction (Handle [[v]] vs [v])
                 raw_vals = item.get('data', {}).get('values')
                 if raw_vals:
-                    # Si c'est une liste de liste, on aplatit
+                    # Flatten list if nested
                     final_vals = raw_vals[0] if (isinstance(raw_vals, list) and len(raw_vals)>0 and isinstance(raw_vals[0], list)) else raw_vals
                     
-                    # Sécurité taille
+                    # Size check
                     if len(final_vals) == len(df):
                         df[col_name] = final_vals
             
@@ -115,84 +124,121 @@ def get_cadence_data(api_key, proj_id, mp_ids, start, end, agg_time, suffix):
             return df
             
         else:
-            st.error(f"Erreur API ({suffix}): {r.status_code} - {r.text}")
+            st.error(f"API Error ({suffix}): {r.status_code} - {r.text}")
             return None
             
     except Exception as e:
-        st.error(f"Erreur Script ({suffix}): {e}")
+        st.error(f"Script Error ({suffix}): {e}")
         return None
 
-# --- EXECUTION ---
+# --- MAIN EXECUTION ---
 if btn_run:
     if not api_key:
-        st.error("Clé API requise")
+        st.error("⚠️ Please enter your API Key.")
         st.stop()
         
     try:
         mp_ids_list = [int(x.strip()) for x in mps_input.split(",") if x.strip()]
     except:
-        st.error("Erreur format IDs")
+        st.error("⚠️ Invalid format for Points IDs (use: 1797, 1798)")
         st.stop()
 
+    # Reset State
     st.session_state['df_1h'] = None
     st.session_state['df_15m'] = None
     
-    # 1. 1H
+    # 1. Fetch 1H Data
     if use_1h:
-        with st.spinner("Chargement 1h..."):
+        with st.spinner("Fetching Hourly Data..."):
             st.session_state['df_1h'] = get_cadence_data(api_key, project_id, mp_ids_list, d_start, d_end, 3600, "1h")
 
-    # 2. 15min
+    # 2. Fetch 15min Data
     if use_15m:
-        with st.spinner("Chargement 15min..."):
+        with st.spinner("Fetching 15min Data..."):
             st.session_state['df_15m'] = get_cadence_data(api_key, project_id, mp_ids_list, d_start, d_end, 900, "15m")
 
-# --- VISUALISATION ---
+# --- VISUALIZATION SECTION ---
 if st.session_state['df_1h'] is not None or st.session_state['df_15m'] is not None:
     
-    st.success("Données récupérées !")
+    st.success("✅ Data successfully retrieved!")
+    st.divider()
     
-    # --- GRAPHIQUE SUPERPOSÉ ---
-    st.markdown("### 📈 Analyse Temporelle")
+    # --- CHART: SUPERIMPOSED ---
+    st.markdown("### 📈 Time Analysis")
     fig = go.Figure()
     
-    # 15 min (Lignes fines en arrière plan)
+    # 15 min (Thin lines, background) - Using Acoem-like Green
     if st.session_state['df_15m'] is not None:
         df = st.session_state['df_15m']
-        # On ne trace que les LAeq pour la clarté
         cols = [c for c in df.columns if "LAeq" in c]
-        for c in cols:
+        for i, c in enumerate(cols):
             fig.add_trace(go.Scatter(
                 x=df.index, y=df[c], mode='lines', name=f"15m - {c}",
-                line=dict(width=1), opacity=0.7
+                line=dict(width=1, color='#00B0F0'), # Cyan/Blue
+                opacity=0.6
             ))
             
-    # 1h (Lignes épaisses + Points au premier plan)
+    # 1h (Thick lines + Markers, foreground) - Using Acoem-like Blue/Contrast
     if st.session_state['df_1h'] is not None:
         df = st.session_state['df_1h']
         cols = [c for c in df.columns if "LAeq" in c]
-        for c in cols:
+        for i, c in enumerate(cols):
             fig.add_trace(go.Scatter(
                 x=df.index, y=df[c], mode='lines+markers', name=f"1H - {c}",
-                line=dict(width=3), marker=dict(size=7)
+                line=dict(width=3, color='#FFFFFF'), # White for high contrast on dark bg
+                marker=dict(size=7, symbol="circle", color='#00CC96') # Green dots
             ))
 
-    fig.update_layout(height=600, hovermode="x unified", legend=dict(orientation="h", y=1.1))
+    fig.update_layout(
+        title="LAeq Comparison (1h vs 15min)",
+        xaxis_title="Date / Time",
+        yaxis_title="Level (dB)",
+        hovermode="x unified",
+        height=550,
+        legend=dict(orientation="h", y=1.1),
+        template="plotly_dark", # Forces dark theme for the chart
+        plot_bgcolor='rgba(0,0,0,0)', # Transparent background
+        paper_bgcolor='rgba(0,0,0,0)',
+    )
     st.plotly_chart(fig, use_container_width=True)
     
     st.divider()
     
-    # --- TABLEAUX SÉPARÉS ---
-    t1, t2 = st.tabs(["Tableau 1h", "Tableau 15min"])
+    # --- DATA TABLES (BUTTONS ON TOP) ---
+    st.markdown("### 📋 Data Tables")
     
-    with t1:
+    tab1, tab2 = st.tabs(["🕒 Hourly Data (1h)", "⏱️ Short Data (15min)"])
+    
+    # TAB 1: 1H
+    with tab1:
         if st.session_state['df_1h'] is not None:
+            # 1. DOWNLOAD BUTTON (TOP)
+            csv_1h = st.session_state['df_1h'].to_csv().encode('utf-8')
+            st.download_button(
+                label="📥 Download CSV (1h)",
+                data=csv_1h,
+                file_name=f"Cadence_1h_{project_id}.csv",
+                mime="text/csv",
+                type="primary"
+            )
+            # 2. TABLE
             st.dataframe(st.session_state['df_1h'], use_container_width=True)
-            csv = st.session_state['df_1h'].to_csv().encode('utf-8')
-            st.download_button("📥 CSV 1h", csv, f"Export_1h_{project_id}.csv", "text/csv")
+        else:
+            st.info("No Hourly data available.")
             
-    with t2:
+    # TAB 2: 15MIN
+    with tab2:
         if st.session_state['df_15m'] is not None:
+            # 1. DOWNLOAD BUTTON (TOP)
+            csv_15m = st.session_state['df_15m'].to_csv().encode('utf-8')
+            st.download_button(
+                label="📥 Download CSV (15min)",
+                data=csv_15m,
+                file_name=f"Cadence_15m_{project_id}.csv",
+                mime="text/csv",
+                type="primary"
+            )
+            # 2. TABLE
             st.dataframe(st.session_state['df_15m'], use_container_width=True)
-            csv = st.session_state['df_15m'].to_csv().encode('utf-8')
-            st.download_button("📥 CSV 15m", csv, f"Export_15m_{project_id}.csv", "text/csv")
+        else:
+            st.info("No 15min data available.")
