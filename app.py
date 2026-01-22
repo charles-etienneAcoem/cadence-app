@@ -22,22 +22,14 @@ st.markdown("""
     <style>
         .block-container { padding-top: 2rem; padding-bottom: 1rem; }
         [data-testid="stSidebarUserContent"] { padding-top: 1rem; }
-        
-        /* Style texte Powered By */
         .powered-text {
-            color: white; 
-            font-size: 0.75rem; 
-            font-style: italic; 
-            opacity: 0.8;
-            margin-right: 8px; /* Espace entre texte et logo */
+            text-align: center; color: white; font-size: 0.7rem;
+            margin-top: 8px; margin-bottom: 2px; font-style: italic; opacity: 0.7;
         }
-        
-        /* Conteneur AECOM (Haut) */
         .aecom-container {
             background-color: white; padding: 12px; border-radius: 6px;
-            display: flex; justify-content: center; align-items: center; margin-bottom: 5px;
+            display: flex; justify-content: center; align-items: center; margin-bottom: 0px;
         }
-        
         .streamlit-expanderHeader {
             font-size: 1rem; font-weight: bold; color: #ff6952;
         }
@@ -54,11 +46,15 @@ if 'df_15m' not in st.session_state: st.session_state['df_15m'] = None
 # --- HELPER: GET PROJECT NAME ---
 @st.cache_data(ttl=3600)
 def get_project_name(api_key, proj_id):
+    """
+    Tente de récupérer le nom du projet.
+    Si échoue, retourne None (pour qu'on utilise l'ID à la place).
+    """
     if not api_key: return None
     url = f"https://cadence.acoem.com/cloud-api/v1/projects/{proj_id}"
     headers = {"accept": "application/json", "X-API-KEY": api_key}
     try:
-        r = requests.get(url, headers=headers, timeout=2)
+        r = requests.get(url, headers=headers, timeout=2) # Timeout court pour ne pas bloquer
         if r.status_code == 200:
             return r.json().get('name', None)
     except:
@@ -67,18 +63,10 @@ def get_project_name(api_key, proj_id):
 
 # --- SIDEBAR ---
 with st.sidebar:
-    # 1. BRANDING (AECOM)
-    st.markdown(f"""
-        <div class="aecom-container"><img src="{AECOM_LOGO}" style="width: 100%; max-width: 160px;"></div>
-    """, unsafe_allow_html=True)
-    
-    # 2. BRANDING LIGNE (Powered by + Logo Acoem)
-    st.markdown(f"""
-        <div style="display: flex; align-items: center; justify-content: center; margin-top: 8px; margin-bottom: 10px;">
-            <span class="powered-text">Powered by</span>
-            <img src="{ACOEM_LOGO_NEW}" style="width: 60px; border-radius: 3px;">
-        </div>
-    """, unsafe_allow_html=True)
+    # BRANDING
+    st.markdown(f"""<div class="aecom-container"><img src="{AECOM_LOGO}" style="width: 100%; max-width: 160px;"></div>""", unsafe_allow_html=True)
+    st.markdown('<div class="powered-text">Powered by</div>', unsafe_allow_html=True)
+    st.markdown(f"""<div style="display: flex; justify-content: center;"><img src="{ACOEM_LOGO_NEW}" style="width: 70px; border-radius: 4px;"></div>""", unsafe_allow_html=True)
     
     st.divider()
     
@@ -90,15 +78,16 @@ with st.sidebar:
     with st.expander("🎯 2. Target", expanded=True):
         project_id = st.number_input("Project ID", value=689, step=1)
         
-        # Detection Nom Projet
-        current_project_name = "Unknown Project"
+        # LOGIQUE D'AFFICHAGE INTELLIGENTE
+        # Par défaut, on utilise l'ID
+        display_name = f"Project #{project_id}"
+        
         if api_key:
             fetched_name = get_project_name(api_key, project_id)
             if fetched_name:
-                current_project_name = fetched_name
-                st.markdown(f"<div class='project-detected'>✅ {current_project_name}</div>", unsafe_allow_html=True)
-            else:
-                st.caption("⚠️ Key invalid or Project ID error")
+                # Si on trouve le nom, on l'utilise et on l'affiche en vert
+                display_name = fetched_name
+                st.markdown(f"<div class='project-detected'>✅ {fetched_name}</div>", unsafe_allow_html=True)
         
         mps_input = st.text_input("Point IDs", value="1797", help="Ex: 1797, 1798")
 
@@ -126,7 +115,8 @@ with st.sidebar:
     btn_run = st.button("🚀 LOAD DATA", type="primary", use_container_width=True)
 
 # --- MAIN TITLE ---
-st.title(f"{current_project_name} - Data Dashboard")
+# Utilise le nom trouvé ou le numéro, jamais "Unknown"
+st.title(f"{display_name} - Data Dashboard")
 
 # --- DATA FETCHING ---
 def get_cadence_data(api_key, proj_id, mp_ids, start_date, end_date, agg_time, selected_labels, ref_indicators):
