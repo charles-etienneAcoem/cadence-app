@@ -5,76 +5,117 @@ import plotly.graph_objects as go
 from datetime import datetime, date, time, timedelta
 import itertools
 
-# --- PAGE CONFIGURATION ---
-st.set_page_config(page_title="Cadence Data Extractor", page_icon="📊", layout="wide")
+# --- 1. PAGE CONFIG & CSS HACK (COMPACT MODE) ---
+st.set_page_config(page_title="Cadence Pro Dashboard", page_icon="🎛️", layout="wide")
 
-# --- ACOEM BRANDING ASSETS ---
+# CSS pour réduire les marges et l'espace vide
+st.markdown("""
+    <style>
+        .block-container { padding-top: 1rem; padding-bottom: 0rem; padding-left: 2rem; padding-right: 2rem; }
+        [data-testid="stSidebar"] { padding-top: 0rem; width: 300px; }
+        .stButton button { width: 100%; border-radius: 5px; }
+        h1 { margin-top: -30px; font-size: 2rem !important; }
+        h3 { font-size: 1.2rem !important; margin-bottom: 5px; }
+    </style>
+""", unsafe_allow_html=True)
+
+# --- ASSETS ---
 ACOEM_LOGO = "https://cdn.bfldr.com/Q3Z2TZY7/at/2rg3rwh4gcnrvn5gkh8rckpp/ACOEM-LOGO-Brandsymbol-RGB-Orange.png?auto=webp&format=png"
-ACOEM_COLORS = ['#ff6952', '#2c5078', '#96c8de'] # Orange, Dark Blue, Light Blue
-
-# --- SIDEBAR ---
-with st.sidebar:
-    st.image(ACOEM_LOGO, width=60)
-    st.title("Cadence Data")
-    
-    st.divider()
-    
-    st.header("1. Authentication")
-    api_key = st.text_input("API Key", type="password")
-    
-    st.header("2. Target")
-    project_id = st.number_input("Project ID", value=689, step=1)
-    mps_input = st.text_input("Point IDs", value="1797", help="e.g.: 1797, 1798")
-    
-    st.header("3. Settings")
-    
-    col_c1, col_c2 = st.columns(2)
-    with col_c1:
-        use_1h = st.checkbox("1h Data", value=True)
-    with col_c2:
-        use_15m = st.checkbox("15min Data", value=True)
-        
-    d_start = st.date_input("Start Date", date(2025, 1, 21))
-    d_end = st.date_input("End Date", date.today())
-    
-    st.divider()
-    btn_run = st.button("🚀 GET DATA", type="primary")
-
-# --- MAIN TITLE ---
-st.title("Get Aggregated Data")
+ACOEM_COLORS = ['#ff6952', '#2c5078', '#96c8de', '#FFB000', '#50C878'] 
 
 # --- SESSION STATE ---
 if 'df_1h' not in st.session_state: st.session_state['df_1h'] = None
 if 'df_15m' not in st.session_state: st.session_state['df_15m'] = None
 
-# --- FUNCTION: FETCH DATA ---
-def get_cadence_data(api_key, proj_id, mp_ids, start_date, end_date, agg_time, suffix):
-    """Fetches data and handles Timezone removal + Strict Filtering."""
+# --- SIDEBAR ---
+with st.sidebar:
+    c_logo, c_title = st.columns([1, 4])
+    with c_logo: st.image(ACOEM_LOGO, width=40)
+    with c_title: st.markdown("**Cadence Data**")
     
-    # 1. DEFINITION DES BORNES TEMPORELLES LOCALES
-    # Start: Date début à 00:00:00
-    dt_start = datetime.combine(start_date, time.min) 
-    # End: Date fin + 1 jour à 00:00:00 (pour inclure toute la journée de fin jusqu'à minuit)
+    st.markdown("---")
+    
+    # 1. AUTH
+    api_key = st.text_input("API Key", type="password")
+    project_id = st.number_input("Project ID", value=689, step=1)
+    
+    # 2. POINTS
+    mps_input = st.text_input("Point IDs", value="1797", help="Ex: 1797, 1798")
+
+    st.markdown("---")
+    st.markdown("**📊 Indicators Selection**")
+
+    # DEFINITION DES INDICATEURS DISPONIBLES (STANDARD CADENCE)
+    STD_INDICATORS = [
+        {"label": "LAeq (Avg)", "code": "LAeq", "method": "average"},
+        {"label": "LAFMax (Max)", "code": "LAFMax", "method": "max"},
+        {"label": "LAFMin (Min)", "code": "LAFMin", "method": "min"},
+        {"label": "LCpeak (Max)", "code": "LCpeak", "method": "max"},
+        {"label": "Lden (Avg)", "code": "Lden", "method": "average"}
+    ]
+    
+    # Selection 1H
+    with st.expander("Hourly (1h)", expanded=True):
+        selected_inds_1h = st.multiselect(
+            "Select Metrics:", 
+            options=[i["label"] for i in STD_INDICATORS],
+            default=["LAeq (Avg)", "LAFMax (Max)"]
+        )
+    
+    # Selection 15min
+    with st.expander("Short (15min)", expanded=False):
+        selected_inds_15m = st.multiselect(
+            "Select Metrics:", 
+            options=[i["label"] for i in STD_INDICATORS],
+            default=["LAeq (Avg)"]
+        )
+        
+    st.markdown("---")
+    # Dates
+    c_d1, c_d2 = st.columns(2)
+    d_start = c_d1.date_input("Start", date(2025, 1, 21))
+    d_end = c_d2.date_input("End", date.today())
+    
+    st.markdown("")
+    btn_run = st.button("🚀 LOAD DATA", type="primary")
+
+# --- MAIN TITLE ---
+st.title(f"Project #{project_id} - Data Dashboard")
+
+# --- CORE FUNCTION ---
+def get_cadence_data(api_key, proj_id, mp_ids, start_date, end_date, agg_time, selected_labels, ref_indicators):
+    """
+    Fetches data dynamically based on user selection.
+    Strictly clips time range.
+    """
+    dt_start = datetime.combine(start_date, time.min)
     dt_end = datetime.combine(end_date + timedelta(days=1), time.min)
     
-    # 2. Build Payload
-    indicators = []
+    # 1. Build Dynamic Indicators List
+    indicators_payload = []
+    
+    # Filter reference list based on user selection
+    active_inds = [i for i in ref_indicators if i["label"] in selected_labels]
+    
     for mp in mp_ids:
-        indicators.append({
-            "measurementPointId": mp, "primaryData": "LAeq", "aggregationMethod": "average",
-            "timeFrequency": "global", "frequencyBand": None, "axis": None, "precision": 1
-        })
-        if agg_time == 3600:
-            indicators.append({
-                "measurementPointId": mp, "primaryData": "LAFMax", "aggregationMethod": "max",
-                "timeFrequency": "global", "frequencyBand": None, "axis": None, "precision": 1
+        for ind in active_inds:
+            indicators_payload.append({
+                "measurementPointId": mp,
+                "primaryData": ind["code"],
+                "aggregationMethod": ind["method"],
+                "timeFrequency": "global",
+                "frequencyBand": None,
+                "axis": None,
+                "precision": 1
             })
 
-    # API Request (UTC ISO)
-    # On demande un peu plus large à l'API pour être sûr d'avoir tout, on filtrera après
+    if not indicators_payload:
+        return None
+
+    # API Request
     payload = {
         "start": f"{start_date}T00:00:00Z", "end": f"{end_date}T23:59:59Z",
-        "aggregationTime": agg_time, "indicators": indicators
+        "aggregationTime": agg_time, "indicators": indicators_payload
     }
     
     headers = {"accept": "application/json", "Content-Type": "application/json", "X-API-KEY": api_key}
@@ -86,154 +127,147 @@ def get_cadence_data(api_key, proj_id, mp_ids, start_date, end_date, agg_time, s
             data = r.json()
             if not data.get('timeStamp'): return None
             
-            # Create DataFrame
             df = pd.DataFrame({'Date': pd.to_datetime(data['timeStamp'])})
             
-            # --- CORRECTION DU BUG TIMEZONE ---
-            # On supprime l'info UTC pour avoir des dates "naïves" comparables avec dt_start/dt_end
+            # Remove Timezone for strict comparison
             df['Date'] = df['Date'].dt.tz_localize(None)
             
-            # --- STRICT FILTERING ---
-            # On garde : Date >= Debut ET Date < Fin (lendemain minuit)
+            # Apply Strict Date Filter
             mask = (df['Date'] >= dt_start) & (df['Date'] < dt_end)
             
-            # --- PARSE INDICATORS ---
+            # Parse Data
             for item in data.get('indicators', []):
-                # ID/Name logic
-                mp_name = "Unknown"
+                # Resolve Name
+                mp_name = str(item.get('measurementPointId'))
                 if 'measurementPoint' in item:
-                    mp_name = item['measurementPoint'].get('measurementPointName', str(item['measurementPoint'].get('measurementPointId')))
-                elif 'measurementPointId' in item:
-                    mp_name = str(item['measurementPointId'])
+                    mp_name = item['measurementPoint'].get('measurementPointName', mp_name)
                 
-                # Data Type
-                dtype = item.get('indicatorDescription', {}).get('primaryData', item.get('primaryData', 'Val'))
+                # Resolve Type
+                dtype = item.get('primaryData', 'Val')
+                if 'indicatorDescription' in item:
+                    dtype = item['indicatorDescription'].get('primaryData', dtype)
+
                 col_name = f"{mp_name} | {dtype}"
                 
-                # Values extraction
+                # Extract Values
                 raw_vals = item.get('data', {}).get('values')
                 if raw_vals:
-                    final_vals = raw_vals[0] if (isinstance(raw_vals, list) and len(raw_vals)>0 and isinstance(raw_vals[0], list)) else raw_vals
-                    
-                    if len(final_vals) == len(df):
-                        df[col_name] = final_vals
+                    vals = raw_vals[0] if (isinstance(raw_vals, list) and len(raw_vals)>0 and isinstance(raw_vals[0], list)) else raw_vals
+                    if len(vals) == len(df):
+                        df[col_name] = vals
 
-            # APPLIQUER LE FILTRE DE DATE MAINTENANT (sur les lignes)
+            # Filter Rows
             df = df.loc[mask].copy()
+            if df.empty: return None
             
-            if df.empty:
-                return None
-                
             df.set_index('Date', inplace=True)
             return df
         else:
-            st.error(f"API Error ({suffix}): {r.status_code}")
+            st.error(f"API Error: {r.status_code}")
             return None
     except Exception as e:
-        st.error(f"Script Error ({suffix}): {e}")
+        st.error(f"Error: {e}")
         return None
 
 # --- EXECUTION ---
 if btn_run:
     if not api_key:
-        st.error("⚠️ Please enter your API Key.")
+        st.error("⚠️ Missing API Key")
         st.stop()
         
     try:
         mp_ids_list = [int(x.strip()) for x in mps_input.split(",") if x.strip()]
     except:
-        st.error("⚠️ Invalid format for Points IDs.")
+        st.error("⚠️ Invalid Point IDs")
         st.stop()
-
+        
+    # Clear old data
     st.session_state['df_1h'] = None
     st.session_state['df_15m'] = None
     
-    if use_1h:
-        with st.spinner("Fetching Hourly Data..."):
-            st.session_state['df_1h'] = get_cadence_data(api_key, project_id, mp_ids_list, d_start, d_end, 3600, "1h")
-    
-    if use_15m:
-        with st.spinner("Fetching 15min Data..."):
-            st.session_state['df_15m'] = get_cadence_data(api_key, project_id, mp_ids_list, d_start, d_end, 900, "15m")
+    with st.spinner("Fetching data from cloud..."):
+        # 1. Fetch 1H
+        if selected_inds_1h:
+            st.session_state['df_1h'] = get_cadence_data(
+                api_key, project_id, mp_ids_list, d_start, d_end, 3600, selected_inds_1h, STD_INDICATORS
+            )
+            
+        # 2. Fetch 15m
+        if selected_inds_15m:
+            st.session_state['df_15m'] = get_cadence_data(
+                api_key, project_id, mp_ids_list, d_start, d_end, 900, selected_inds_15m, STD_INDICATORS
+            )
 
-# --- VISUALIZATION ---
+# --- VISUALIZATION (SIDE BY SIDE) ---
 if st.session_state['df_1h'] is not None or st.session_state['df_15m'] is not None:
     
-    tab1, tab2 = st.tabs(["🕒 Hourly Data (1h)", "⏱️ Short Data (15min)"])
+    # Definition des Onglets
+    t1, t2 = st.tabs(["⏱️ Hourly Data (1h)", "⚡ Short Data (15min)"])
     
-    # CALCUL DES LIMITES DU GRAPHIQUE
-    # On force l'axe X à aller de (DateDébut 00:00) à (DateFin +1j 00:00)
-    x_axis_min = datetime.combine(d_start, time.min)
-    x_axis_max = datetime.combine(d_end + timedelta(days=1), time.min)
-    
-    # --- TAB 1: HOURLY ---
-    with tab1:
-        if st.session_state['df_1h'] is not None:
-            df = st.session_state['df_1h']
-            
-            fig = go.Figure()
-            colors = itertools.cycle(ACOEM_COLORS)
-            
-            for col in df.columns:
-                fig.add_trace(go.Scatter(
-                    x=df.index, y=df[col],
-                    mode='lines',
-                    name=col,
-                    line=dict(width=2, color=next(colors))
-                ))
-            
-            fig.update_layout(
-                title=f"Hourly Evolution ({d_start} to {d_end})",
-                xaxis_title="Time", yaxis_title="dB",
-                # FORCER L'AXE X FIXE
-                xaxis=dict(range=[x_axis_min, x_axis_max]),
-                height=500, hovermode="x unified",
-                template="plotly_dark",
-                paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                legend=dict(orientation="h", y=1.1)
-            )
-            st.plotly_chart(fig, use_container_width=True)
-            
-            st.divider()
-            col_btn, _ = st.columns([1, 4])
-            csv = df.to_csv().encode('utf-8')
-            col_btn.download_button("📥 Download CSV (1h)", csv, f"Cadence_1h_{project_id}.csv", "text/csv", type="primary")
-            st.dataframe(df, use_container_width=True)
-        else:
-            st.info("No Hourly Data.")
+    # Helper pour afficher Graph + Tableau cote a cote
+    def render_dashboard(df, title_suffix):
+        if df is None:
+            st.info("No data fetched for this aggregation.")
+            return
 
-    # --- TAB 2: 15 MIN ---
-    with tab2:
-        if st.session_state['df_15m'] is not None:
-            df = st.session_state['df_15m']
-            
+        # Layout: Graph (70%) | Table (30%)
+        col_graph, col_table = st.columns([7, 3])
+        
+        # --- LEFT: GRAPH ---
+        with col_graph:
             fig = go.Figure()
             colors = itertools.cycle(ACOEM_COLORS)
             
             for col in df.columns:
                 fig.add_trace(go.Scatter(
                     x=df.index, y=df[col],
-                    mode='lines',
+                    mode='lines', # Clean lines
                     name=col,
                     line=dict(width=2, color=next(colors))
                 ))
             
+            # Force X Axis
+            x_min = datetime.combine(d_start, time.min)
+            x_max = datetime.combine(d_end + timedelta(days=1), time.min)
+            
             fig.update_layout(
-                title=f"15min Evolution ({d_start} to {d_end})",
-                xaxis_title="Time", yaxis_title="dB",
-                # FORCER L'AXE X FIXE
-                xaxis=dict(range=[x_axis_min, x_axis_max]),
-                height=500, hovermode="x unified",
+                title=f"Evolution {title_suffix}",
+                xaxis_title="Time", yaxis_title="Level (dB)",
+                xaxis=dict(range=[x_min, x_max]),
+                height=500, # Hauteur fixe
+                margin=dict(l=20, r=20, t=40, b=20),
                 template="plotly_dark",
                 paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                legend=dict(orientation="h", y=1.1)
+                legend=dict(orientation="h", y=1.1),
+                hovermode="x unified"
             )
             st.plotly_chart(fig, use_container_width=True)
+
+        # --- RIGHT: TABLE ---
+        with col_table:
+            st.markdown(f"**Data Table** ({len(df)} rows)")
             
-            st.divider()
-            col_btn, _ = st.columns([1, 4])
+            # Export Button
             csv = df.to_csv().encode('utf-8')
-            col_btn.download_button("📥 Download CSV (15m)", csv, f"Cadence_15m_{project_id}.csv", "text/csv", type="primary")
-            st.dataframe(df, use_container_width=True)
-        else:
-            st.info("No 15min Data.")
+            st.download_button(
+                label="📥 CSV",
+                data=csv,
+                file_name=f"Cadence_{title_suffix}_{project_id}.csv",
+                mime="text/csv",
+                type="primary",
+                use_container_width=True
+            )
+            
+            # Table (Compact height to match graph)
+            st.dataframe(df, height=450, use_container_width=True)
+
+    # --- RENDER TABS ---
+    with t1:
+        render_dashboard(st.session_state['df_1h'], "1h")
+        
+    with t2:
+        render_dashboard(st.session_state['df_15m'], "15min")
+
+else:
+    # Empty state - Placeholder
+    st.info("👈 Please configure the extraction in the sidebar and click LOAD DATA.")
