@@ -6,34 +6,49 @@ from datetime import datetime, date, time, timedelta
 import itertools
 
 # --- ASSETS ---
-ACOEM_LOGO = "https://cdn.bfldr.com/Q3Z2TZY7/at/2rg3rwh4gcnrvn5gkh8rckpp/ACOEM-LOGO-Brandsymbol-RGB-Orange.png?auto=webp&format=png"
+# Nouveau logo Acoem (Bicolore JPG)
+ACOEM_LOGO_NEW = "https://cdn.bfldr.com/Q3Z2TZY7/at/b4z3s28jpswp92h6z35h9f3/ACOEM-LOGO-WithoutBaseline-RGB-Bicolor.jpg?auto=webp&format=jpg"
+# Logo AECOM
 AECOM_LOGO = "https://zerionsoftware.com/wp-content/uploads/2023/10/aecom-logo.png"
+
 ACOEM_COLORS = ['#ff6952', '#2c5078', '#96c8de', '#FFB000', '#50C878'] 
 
 # --- 1. PAGE CONFIGURATION ---
-# Titre de l'onglet et Favicon Acoem
 st.set_page_config(
     page_title="Cadence Data", 
-    page_icon=ACOEM_LOGO, 
+    page_icon=ACOEM_LOGO_NEW, 
     layout="wide"
 )
 
-# --- 2. CSS HACKS (COMPACT HEADER & SIDEBAR) ---
+# --- 2. CSS CUSTOMIZATION ---
 st.markdown("""
     <style>
-        /* Réduire l'espace en haut de la page principale */
-        .block-container { padding-top: 1rem; padding-bottom: 0rem; }
+        /* Réduire l'espace haut de page */
+        .block-container { padding-top: 2rem; padding-bottom: 1rem; }
         
-        /* Réduire l'espace en haut de la sidebar */
+        /* Réduire l'espace haut sidebar */
         [data-testid="stSidebarUserContent"] { padding-top: 1rem; }
         
-        /* Alignement des logos */
-        .logo-container { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 5px; }
-        .powered-by { text-align: center; font-size: 0.8rem; font-weight: bold; color: #555; margin-bottom: 20px; }
+        /* Style pour le texte Powered By */
+        .powered-text {
+            text-align: center;
+            color: white;
+            font-size: 0.9rem;
+            margin-top: 10px;
+            margin-bottom: 5px;
+            font-style: italic;
+        }
         
-        /* Ajustement des titres */
-        h1 { font-size: 1.8rem !important; }
-        h3 { font-size: 1.2rem !important; }
+        /* Conteneur blanc pour le logo AECOM */
+        .aecom-container {
+            background-color: white;
+            padding: 15px;
+            border-radius: 8px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 10px;
+        }
     </style>
 """, unsafe_allow_html=True)
 
@@ -41,28 +56,34 @@ st.markdown("""
 if 'df_1h' not in st.session_state: st.session_state['df_1h'] = None
 if 'df_15m' not in st.session_state: st.session_state['df_15m'] = None
 
-# --- SIDEBAR ---
+# --- SIDEBAR BRANDING & INPUTS ---
 with st.sidebar:
-    # --- HEADER BRANDING ---
-    # Affichage des deux logos côte à côte
-    col_l1, col_l2 = st.columns(2)
-    with col_l1:
-        st.image(AECOM_LOGO, use_container_width=True)
-    with col_l2:
-        st.image(ACOEM_LOGO, use_container_width=True)
-        
-    st.markdown("<div class='powered-by'>AECOM powered by Acoem</div>", unsafe_allow_html=True)
-    st.markdown("---")
+    # 1. BRANDING BLOCK
+    # Logo AECOM sur fond blanc
+    st.markdown(f"""
+        <div class="aecom-container">
+            <img src="{AECOM_LOGO}" style="width: 100%; max-width: 180px;">
+        </div>
+    """, unsafe_allow_html=True)
     
-    # 1. AUTH
+    # Texte Powered by
+    st.markdown('<div class="powered-text">Powered by</div>', unsafe_allow_html=True)
+    
+    # Logo Acoem Bicolore
+    st.image(ACOEM_LOGO_NEW, use_container_width=True)
+    
+    st.divider()
+    
+    # 2. AUTH
+    st.header("1. Authentication")
     api_key = st.text_input("API Key", type="password")
-    project_id = st.number_input("Project ID", value=689, step=1)
     
-    # 2. POINTS
+    # 3. TARGET
+    st.header("2. Target")
+    project_id = st.number_input("Project ID", value=689, step=1)
     mps_input = st.text_input("Point IDs", value="1797", help="Ex: 1797, 1798")
 
-    st.markdown("---")
-    st.markdown("**📊 Indicators**")
+    st.header("3. Settings")
 
     # STD INDICATORS LIST
     STD_INDICATORS = [
