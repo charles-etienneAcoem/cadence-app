@@ -2,7 +2,7 @@ import streamlit as st
 import requests
 import pandas as pd
 import plotly.graph_objects as go
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, time
 import itertools
 
 # --- PAGE CONFIGURATION ---
@@ -14,7 +14,6 @@ ACOEM_COLORS = ['#ff6952', '#2c5078', '#96c8de'] # Orange, Dark Blue, Light Blue
 
 # --- SIDEBAR ---
 with st.sidebar:
-    # 1. Logo at the very top left
     st.image(ACOEM_LOGO, width=60)
     st.title("Cadence Data")
     
@@ -49,27 +48,29 @@ if 'df_1h' not in st.session_state: st.session_state['df_1h'] = None
 if 'df_15m' not in st.session_state: st.session_state['df_15m'] = None
 
 # --- FUNCTION: FETCH DATA ---
-def get_cadence_data(api_key, proj_id, mp_ids, start, end, agg_time, suffix):
-    """Fetches data from Cadence Cloud API and filters strictly by date."""
+def get_cadence_data(api_key, proj_id, mp_ids, start_date, end_date, agg_time, suffix):
+    """Fetches data and strictly clips it to the requested time range."""
+    
+    # Define exact datetime boundaries
+    dt_start = datetime.combine(start_date, time.min) # 00:00:00
+    dt_end = datetime.combine(end_date, time.max)     # 23:59:59.999999
     
     # 1. Build Payload
     indicators = []
     for mp in mp_ids:
-        # LAeq
         indicators.append({
             "measurementPointId": mp, "primaryData": "LAeq", "aggregationMethod": "average",
             "timeFrequency": "global", "frequencyBand": None, "axis": None, "precision": 1
         })
-        # Add Max for Hourly
         if agg_time == 3600:
             indicators.append({
                 "measurementPointId": mp, "primaryData": "LAFMax", "aggregationMethod": "max",
                 "timeFrequency": "global", "frequencyBand": None, "axis": None, "precision": 1
             })
 
-    # API Request uses strict ISO times
+    # API Request (UTC ISO)
     payload = {
-        "start": f"{start}T00:00:00Z", "end": f"{end}T23:59:59Z",
+        "start": f"{start_date}T00:00:00Z", "end": f"{end_date}T23:59:59Z",
         "aggregationTime": agg_time, "indicators": indicators
     }
     
@@ -82,60 +83,43 @@ def get_cadence_data(api_key, proj_id, mp_ids, start, end, agg_time, suffix):
             data = r.json()
             if not data.get('timeStamp'): return None
             
+            # Create DataFrame
             df = pd.DataFrame({'Date': pd.to_datetime(data['timeStamp'])})
             
-            # --- STRICT DATE FILTERING ---
-            # Ensure we strictly clip data to the selected days (removes timezone overlaps)
-            # We assume the API returns UTC ('Z'). We filter based on the date component.
-            mask = (df['Date'].dt.date >= start) & (df['Date'].dt.date <= end)
+            # --- STRICT FILTERING ---
+            # Keep only data within the requested range
+            mask = (df['Date'] >= dt_start) & (df['Date'] <= dt_end)
+            # We filter the dataframe structure later, but first we need to align values
+            
+            for item in data.get('indicators', []):
+                # ID/Name logic
+                mp_name = "Unknown"
+                if 'measurementPoint' in item:
+                    mp_name = item['measurementPoint'].get('measurementPointName', str(item['measurementPoint'].get('measurementPointId')))
+                elif 'measurementPointId' in item:
+                    mp_name = str(item['measurementPointId'])
+                
+                # Data Type
+                dtype = item.get('indicatorDescription', {}).get('primaryData', item.get('primaryData', 'Val'))
+                col_name = f"{mp_name} | {dtype}"
+                
+                # Values extraction
+                raw_vals = item.get('data', {}).get('values')
+                if raw_vals:
+                    final_vals = raw_vals[0] if (isinstance(raw_vals, list) and len(raw_vals)>0 and isinstance(raw_vals[0], list)) else raw_vals
+                    
+                    if len(final_vals) == len(df):
+                        # Add column
+                        df[col_name] = final_vals
+                    else:
+                        pass # Ignore mismatch size
+            
+            # Apply Filter NOW
             df = df.loc[mask].copy()
             
             if df.empty:
                 return None
-            
-            # --- PARSE INDICATORS ---
-            for item in data.get('indicators', []):
-                # ID/Name logic
-                mp_id = "Unknown"
-                mp_name = "Unknown"
-                if 'measurementPoint' in item:
-                    mp_obj = item['measurementPoint']
-                    mp_id = mp_obj.get('measurementPointId')
-                    mp_name = mp_obj.get('measurementPointName', str(mp_id))
-                elif 'measurementPointId' in item:
-                    mp_id = item['measurementPointId']
-                    mp_name = str(mp_id)
                 
-                # Data Type
-                dtype = "Val"
-                if 'indicatorDescription' in item:
-                    dtype = item['indicatorDescription'].get('primaryData', 'Val')
-                elif 'primaryData' in item:
-                    dtype = item['primaryData']
-
-                col_name = f"{mp_name} | {dtype}"
-                
-                # Values logic
-                raw_vals = item.get('data', {}).get('values')
-                if raw_vals:
-                    # Flatten list if nested [[v]] -> [v]
-                    final_vals = raw_vals[0] if (isinstance(raw_vals, list) and len(raw_vals)>0 and isinstance(raw_vals[0], list)) else raw_vals
-                    
-                    # Since we filtered the DataFrame rows (dates), we must also filter the values list
-                    # However, API returns values matching the original timestamp list.
-                    # So we put values in a temp Series and apply the same mask.
-                    
-                    # 1. Check if raw length matches original timestamp length (before filter)
-                    original_len = len(data['timeStamp'])
-                    if len(final_vals) == original_len:
-                        # Create a temp series with the original index
-                        temp_series = pd.Series(final_vals, index=pd.to_datetime(data['timeStamp']))
-                        # Apply the filter mask using loc
-                        df[col_name] = temp_series.loc[df['Date']].values
-                    else:
-                        # Fallback (rare mismatch)
-                        st.warning(f"Size mismatch for {col_name}")
-
             df.set_index('Date', inplace=True)
             return df
         else:
@@ -168,66 +152,22 @@ if btn_run:
         with st.spinner("Fetching 15min Data..."):
             st.session_state['df_15m'] = get_cadence_data(api_key, project_id, mp_ids_list, d_start, d_end, 900, "15m")
 
-# --- VISUALIZATION (TABS ARCHITECTURE) ---
+# --- VISUALIZATION ---
 if st.session_state['df_1h'] is not None or st.session_state['df_15m'] is not None:
     
-    # Create the Tabs
     tab1, tab2 = st.tabs(["🕒 Hourly Data (1h)", "⏱️ Short Data (15min)"])
+    
+    # Calculate Axis Boundaries (Force 00:00 to 23:59)
+    x_axis_min = datetime.combine(d_start, time.min)
+    x_axis_max = datetime.combine(d_end, time.max)
     
     # --- TAB 1: HOURLY ---
     with tab1:
         if st.session_state['df_1h'] is not None:
             df = st.session_state['df_1h']
             
-            # 1. GRAPH
             fig = go.Figure()
             colors = itertools.cycle(ACOEM_COLORS)
-            
-            for col in df.columns:
-                fig.add_trace(go.Scatter(
-                    x=df.index, y=df[col],
-                    mode='lines', # Clean lines (no markers)
-                    name=col,
-                    line=dict(width=2, color=next(colors))
-                ))
-            
-            # Force X Axis Range to stick to user selection (visual comfort)
-            # Adding a small buffer of minutes to avoid cutting the line on edges
-            x_min = datetime.combine(d_start, datetime.min.time())
-            x_max = datetime.combine(d_end, datetime.max.time())
-
-            fig.update_layout(
-                title=f"Hourly Evolution - Project {project_id}",
-                xaxis_title="Time", yaxis_title="dB",
-                xaxis_range=[x_min, x_max], # FORCE RANGE
-                height=500, hovermode="x unified",
-                template="plotly_dark",
-                paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                legend=dict(orientation="h", y=1.1)
-            )
-            st.plotly_chart(fig, use_container_width=True)
-            
-            st.divider()
-            
-            # 2. EXPORT & TABLE
-            col_btn, col_txt = st.columns([1, 4])
-            csv = df.to_csv().encode('utf-8')
-            col_btn.download_button(
-                "📥 Download CSV (1h)", csv, f"Cadence_1h_{project_id}.csv", "text/csv", type="primary"
-            )
-            st.dataframe(df, use_container_width=True)
-            
-        else:
-            st.info("No Hourly Data requested or found.")
-
-    # --- TAB 2: 15 MIN ---
-    with tab2:
-        if st.session_state['df_15m'] is not None:
-            df = st.session_state['df_15m']
-            
-            # 1. GRAPH
-            fig = go.Figure()
-            colors = itertools.cycle(ACOEM_COLORS) # Reset colors
             
             for col in df.columns:
                 fig.add_trace(go.Scatter(
@@ -237,14 +177,11 @@ if st.session_state['df_1h'] is not None or st.session_state['df_15m'] is not No
                     line=dict(width=2, color=next(colors))
                 ))
             
-            # Force Range
-            x_min = datetime.combine(d_start, datetime.min.time())
-            x_max = datetime.combine(d_end, datetime.max.time())
-            
             fig.update_layout(
-                title=f"15min Evolution - Project {project_id}",
+                title=f"Hourly Evolution ({d_start} to {d_end})",
                 xaxis_title="Time", yaxis_title="dB",
-                xaxis_range=[x_min, x_max], # FORCE RANGE
+                # FORCE EXACT RANGE
+                xaxis=dict(range=[x_axis_min, x_axis_max]),
                 height=500, hovermode="x unified",
                 template="plotly_dark",
                 paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
@@ -253,14 +190,45 @@ if st.session_state['df_1h'] is not None or st.session_state['df_15m'] is not No
             st.plotly_chart(fig, use_container_width=True)
             
             st.divider()
-            
-            # 2. EXPORT & TABLE
-            col_btn, col_txt = st.columns([1, 4])
+            col_btn, _ = st.columns([1, 4])
             csv = df.to_csv().encode('utf-8')
-            col_btn.download_button(
-                "📥 Download CSV (15m)", csv, f"Cadence_15m_{project_id}.csv", "text/csv", type="primary"
-            )
+            col_btn.download_button("📥 Download CSV (1h)", csv, f"Cadence_1h_{project_id}.csv", "text/csv", type="primary")
             st.dataframe(df, use_container_width=True)
-            
         else:
-            st.info("No 15min Data requested or found.")
+            st.info("No Hourly Data.")
+
+    # --- TAB 2: 15 MIN ---
+    with tab2:
+        if st.session_state['df_15m'] is not None:
+            df = st.session_state['df_15m']
+            
+            fig = go.Figure()
+            colors = itertools.cycle(ACOEM_COLORS)
+            
+            for col in df.columns:
+                fig.add_trace(go.Scatter(
+                    x=df.index, y=df[col],
+                    mode='lines',
+                    name=col,
+                    line=dict(width=2, color=next(colors))
+                ))
+            
+            fig.update_layout(
+                title=f"15min Evolution ({d_start} to {d_end})",
+                xaxis_title="Time", yaxis_title="dB",
+                # FORCE EXACT RANGE
+                xaxis=dict(range=[x_axis_min, x_axis_max]),
+                height=500, hovermode="x unified",
+                template="plotly_dark",
+                paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                legend=dict(orientation="h", y=1.1)
+            )
+            st.plotly_chart(fig, use_container_width=True)
+            
+            st.divider()
+            col_btn, _ = st.columns([1, 4])
+            csv = df.to_csv().encode('utf-8')
+            col_btn.download_button("📥 Download CSV (15m)", csv, f"Cadence_15m_{project_id}.csv", "text/csv", type="primary")
+            st.dataframe(df, use_container_width=True)
+        else:
+            st.info("No 15min Data.")
