@@ -23,17 +23,16 @@ st.markdown("""
         .block-container { padding-top: 2rem; padding-bottom: 1rem; }
         [data-testid="stSidebarUserContent"] { padding-top: 1rem; }
         .powered-text {
-            text-align: center; color: white; font-size: 0.8rem;
-            margin-top: 5px; margin-bottom: 5px; font-style: italic; opacity: 0.8;
+            text-align: center; color: white; font-size: 0.7rem; /* Plus petit */
+            margin-top: 8px; margin-bottom: 2px; font-style: italic; opacity: 0.7;
         }
         .aecom-container {
-            background-color: white; padding: 10px; border-radius: 6px;
-            display: flex; justify-content: center; align-items: center; margin-bottom: 5px;
+            background-color: white; padding: 12px; border-radius: 6px;
+            display: flex; justify-content: center; align-items: center; margin-bottom: 0px;
         }
         .streamlit-expanderHeader {
             font-size: 1rem; font-weight: bold; color: #ff6952;
         }
-        /* Style pour le nom du projet détecté dans la sidebar */
         .project-detected {
             color: #50C878; font-size: 0.85rem; font-weight: bold; margin-top: -10px; margin-bottom: 10px;
         }
@@ -44,7 +43,7 @@ st.markdown("""
 if 'df_1h' not in st.session_state: st.session_state['df_1h'] = None
 if 'df_15m' not in st.session_state: st.session_state['df_15m'] = None
 
-# --- HELPER: GET PROJECT NAME (CACHED) ---
+# --- HELPER: GET PROJECT NAME ---
 @st.cache_data(ttl=3600)
 def get_project_name(api_key, proj_id):
     if not api_key: return None
@@ -60,11 +59,19 @@ def get_project_name(api_key, proj_id):
 
 # --- SIDEBAR ---
 with st.sidebar:
+    # 1. BRANDING (AECOM GROS / ACOEM PETIT)
     st.markdown(f"""
         <div class="aecom-container"><img src="{AECOM_LOGO}" style="width: 100%; max-width: 160px;"></div>
     """, unsafe_allow_html=True)
+    
     st.markdown('<div class="powered-text">Powered by</div>', unsafe_allow_html=True)
-    st.image(ACOEM_LOGO_NEW, use_container_width=True)
+    
+    # LOGO ACOEM EN TOUT PETIT (HTML pour contrôle précis)
+    st.markdown(f"""
+        <div style="display: flex; justify-content: center;">
+            <img src="{ACOEM_LOGO_NEW}" style="width: 70px; border-radius: 4px;">
+        </div>
+    """, unsafe_allow_html=True)
     
     st.divider()
     
@@ -76,7 +83,7 @@ with st.sidebar:
     with st.expander("🎯 2. Target", expanded=True):
         project_id = st.number_input("Project ID", value=689, step=1)
         
-        # --- DETECTION IMMEDIATE DU NOM DU PROJET ---
+        # Detection Nom Projet
         current_project_name = "Unknown Project"
         if api_key:
             fetched_name = get_project_name(api_key, project_id)
@@ -84,7 +91,7 @@ with st.sidebar:
                 current_project_name = fetched_name
                 st.markdown(f"<div class='project-detected'>✅ {current_project_name}</div>", unsafe_allow_html=True)
             else:
-                st.caption("⚠️ Project not found or Key invalid")
+                st.caption("⚠️ Key invalid or Project ID error")
         
         mps_input = st.text_input("Point IDs", value="1797", help="Ex: 1797, 1798")
 
@@ -111,7 +118,7 @@ with st.sidebar:
     st.markdown("")
     btn_run = st.button("🚀 LOAD DATA", type="primary", use_container_width=True)
 
-# --- MAIN TITLE (UPDATES INSTANTLY) ---
+# --- MAIN TITLE ---
 st.title(f"{current_project_name} - Data Dashboard")
 
 # --- DATA FETCHING ---
@@ -214,7 +221,7 @@ if st.session_state['df_1h'] is not None or st.session_state['df_15m'] is not No
             x_max = datetime.combine(d_end + timedelta(days=1), time.min)
             
             fig.update_layout(
-                title=f"{title_suffix}", # PLUS DE 'EVOLUTION' ICI
+                title=f"{title_suffix}",
                 xaxis_title="Time", yaxis_title="Level (dB)",
                 xaxis=dict(range=[x_min, x_max]), height=500,
                 margin=dict(l=20, r=20, t=40, b=20),
