@@ -33,6 +33,10 @@ st.markdown("""
         .streamlit-expanderHeader {
             font-size: 1rem; font-weight: bold; color: #ff6952;
         }
+        /* Style pour le nom du projet détecté dans la sidebar */
+        .project-detected {
+            color: #50C878; font-size: 0.85rem; font-weight: bold; margin-top: -10px; margin-bottom: 10px;
+        }
     </style>
 """, unsafe_allow_html=True)
 
@@ -40,19 +44,19 @@ st.markdown("""
 if 'df_1h' not in st.session_state: st.session_state['df_1h'] = None
 if 'df_15m' not in st.session_state: st.session_state['df_15m'] = None
 
-# --- HELPER: GET PROJECT NAME ---
-@st.cache_data(ttl=3600) # Cache pour ne pas spammer l'API
+# --- HELPER: GET PROJECT NAME (CACHED) ---
+@st.cache_data(ttl=3600)
 def get_project_name(api_key, proj_id):
-    if not api_key: return f"Project #{proj_id}"
+    if not api_key: return None
     url = f"https://cadence.acoem.com/cloud-api/v1/projects/{proj_id}"
     headers = {"accept": "application/json", "X-API-KEY": api_key}
     try:
         r = requests.get(url, headers=headers, timeout=2)
         if r.status_code == 200:
-            return r.json().get('name', f"Project #{proj_id}")
+            return r.json().get('name', None)
     except:
         pass
-    return f"Project #{proj_id}"
+    return None
 
 # --- SIDEBAR ---
 with st.sidebar:
@@ -64,13 +68,27 @@ with st.sidebar:
     
     st.divider()
     
+    # --- 1. AUTH ---
     with st.expander("🔐 1. Authentication", expanded=True):
         api_key = st.text_input("API Key", type="password", help="Starts with EZfX...")
 
+    # --- 2. TARGET ---
     with st.expander("🎯 2. Target", expanded=True):
         project_id = st.number_input("Project ID", value=689, step=1)
+        
+        # --- DETECTION IMMEDIATE DU NOM DU PROJET ---
+        current_project_name = "Unknown Project"
+        if api_key:
+            fetched_name = get_project_name(api_key, project_id)
+            if fetched_name:
+                current_project_name = fetched_name
+                st.markdown(f"<div class='project-detected'>✅ {current_project_name}</div>", unsafe_allow_html=True)
+            else:
+                st.caption("⚠️ Project not found or Key invalid")
+        
         mps_input = st.text_input("Point IDs", value="1797", help="Ex: 1797, 1798")
 
+    # --- 3. SETTINGS ---
     with st.expander("⚙️ 3. Settings", expanded=True):
         STD_INDICATORS = [
             {"label": "LAeq (Avg)", "code": "LAeq", "method": "average"},
@@ -87,21 +105,14 @@ with st.sidebar:
         st.divider()
         st.caption("Time Range:")
         col_d1, col_d2 = st.columns(2)
-        # DATE PAR DÉFAUT = TODAY
         d_start = col_d1.date_input("Start", date.today())
         d_end = col_d2.date_input("End", date.today())
 
     st.markdown("")
     btn_run = st.button("🚀 LOAD DATA", type="primary", use_container_width=True)
 
-# --- MAIN TITLE (DYNAMIC) ---
-if api_key:
-    # Récupère le nom réel du projet
-    display_title = get_project_name(api_key, project_id)
-else:
-    display_title = f"Project #{project_id}"
-
-st.title(f"{display_title} - Data Dashboard")
+# --- MAIN TITLE (UPDATES INSTANTLY) ---
+st.title(f"{current_project_name} - Data Dashboard")
 
 # --- DATA FETCHING ---
 def get_cadence_data(api_key, proj_id, mp_ids, start_date, end_date, agg_time, selected_labels, ref_indicators):
@@ -203,7 +214,8 @@ if st.session_state['df_1h'] is not None or st.session_state['df_15m'] is not No
             x_max = datetime.combine(d_end + timedelta(days=1), time.min)
             
             fig.update_layout(
-                title=f"Evolution {title_suffix}", xaxis_title="Time", yaxis_title="Level (dB)",
+                title=f"{title_suffix}", # PLUS DE 'EVOLUTION' ICI
+                xaxis_title="Time", yaxis_title="Level (dB)",
                 xaxis=dict(range=[x_min, x_max]), height=500,
                 margin=dict(l=20, r=20, t=40, b=20),
                 template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
@@ -214,10 +226,7 @@ if st.session_state['df_1h'] is not None or st.session_state['df_15m'] is not No
         with col_table:
             st.markdown(f"**Data Table** ({len(df)} rows)")
             csv = df.to_csv().encode('utf-8')
-            
-            # Key unique pour éviter l'erreur de doublon
             unique_key = f"dl_btn_{title_suffix}"
-            
             st.download_button(
                 label="📥 CSV Export",
                 data=csv,
@@ -229,8 +238,8 @@ if st.session_state['df_1h'] is not None or st.session_state['df_15m'] is not No
             )
             st.dataframe(df, height=450, use_container_width=True)
 
-    with t1: render_dashboard(st.session_state['df_1h'], "1h")
-    with t2: render_dashboard(st.session_state['df_15m'], "15min")
+    with t1: render_dashboard(st.session_state['df_1h'], "1h Data")
+    with t2: render_dashboard(st.session_state['df_15m'], "15min Data")
 
 else:
     st.info("👈 Open the sections in the sidebar to configure and load data.")
