@@ -40,6 +40,20 @@ st.markdown("""
 if 'df_1h' not in st.session_state: st.session_state['df_1h'] = None
 if 'df_15m' not in st.session_state: st.session_state['df_15m'] = None
 
+# --- HELPER: GET PROJECT NAME ---
+@st.cache_data(ttl=3600) # Cache pour ne pas spammer l'API
+def get_project_name(api_key, proj_id):
+    if not api_key: return f"Project #{proj_id}"
+    url = f"https://cadence.acoem.com/cloud-api/v1/projects/{proj_id}"
+    headers = {"accept": "application/json", "X-API-KEY": api_key}
+    try:
+        r = requests.get(url, headers=headers, timeout=2)
+        if r.status_code == 200:
+            return r.json().get('name', f"Project #{proj_id}")
+    except:
+        pass
+    return f"Project #{proj_id}"
+
 # --- SIDEBAR ---
 with st.sidebar:
     st.markdown(f"""
@@ -73,14 +87,21 @@ with st.sidebar:
         st.divider()
         st.caption("Time Range:")
         col_d1, col_d2 = st.columns(2)
-        d_start = col_d1.date_input("Start", date(2025, 1, 21))
+        # DATE PAR DÉFAUT = TODAY
+        d_start = col_d1.date_input("Start", date.today())
         d_end = col_d2.date_input("End", date.today())
 
     st.markdown("")
     btn_run = st.button("🚀 LOAD DATA", type="primary", use_container_width=True)
 
-# --- MAIN TITLE ---
-st.title(f"Project #{project_id} - Data Dashboard")
+# --- MAIN TITLE (DYNAMIC) ---
+if api_key:
+    # Récupère le nom réel du projet
+    display_title = get_project_name(api_key, project_id)
+else:
+    display_title = f"Project #{project_id}"
+
+st.title(f"{display_title} - Data Dashboard")
 
 # --- DATA FETCHING ---
 def get_cadence_data(api_key, proj_id, mp_ids, start_date, end_date, agg_time, selected_labels, ref_indicators):
@@ -194,8 +215,7 @@ if st.session_state['df_1h'] is not None or st.session_state['df_15m'] is not No
             st.markdown(f"**Data Table** ({len(df)} rows)")
             csv = df.to_csv().encode('utf-8')
             
-            # --- CORRECTION DE L'ERREUR ICI ---
-            # On ajoute 'key' pour que chaque bouton soit unique
+            # Key unique pour éviter l'erreur de doublon
             unique_key = f"dl_btn_{title_suffix}"
             
             st.download_button(
@@ -203,7 +223,7 @@ if st.session_state['df_1h'] is not None or st.session_state['df_15m'] is not No
                 data=csv,
                 file_name=f"Cadence_{title_suffix}_{project_id}.csv",
                 mime="text/csv",
-                key=unique_key, # La clé unique qui sauve la mise !
+                key=unique_key, 
                 type="primary",
                 use_container_width=True
             )
