@@ -20,11 +20,8 @@ st.set_page_config(
 # --- 2. CSS CUSTOMIZATION ---
 st.markdown("""
     <style>
-        /* Compactage général */
-        .block-container { padding-top: 1rem; padding-bottom: 1rem; }
+        .block-container { padding-top: 2rem; padding-bottom: 1rem; }
         [data-testid="stSidebarUserContent"] { padding-top: 1rem; }
-        
-        /* Branding */
         .powered-text {
             text-align: center; color: white; font-size: 0.8rem;
             margin-top: 5px; margin-bottom: 5px; font-style: italic; opacity: 0.8;
@@ -33,12 +30,8 @@ st.markdown("""
             background-color: white; padding: 10px; border-radius: 6px;
             display: flex; justify-content: center; align-items: center; margin-bottom: 5px;
         }
-        
-        /* Personnalisation des Expanders (Accordéons) pour qu'ils soient plus compacts */
         .streamlit-expanderHeader {
-            font-size: 1rem;
-            font-weight: bold;
-            color: #ff6952; /* Orange Acoem pour les titres */
+            font-size: 1rem; font-weight: bold; color: #ff6952;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -49,7 +42,6 @@ if 'df_15m' not in st.session_state: st.session_state['df_15m'] = None
 
 # --- SIDEBAR ---
 with st.sidebar:
-    # --- BRANDING ---
     st.markdown(f"""
         <div class="aecom-container"><img src="{AECOM_LOGO}" style="width: 100%; max-width: 160px;"></div>
     """, unsafe_allow_html=True)
@@ -58,19 +50,14 @@ with st.sidebar:
     
     st.divider()
     
-    # --- 1. AUTHENTICATION (COLLAPSIBLE) ---
-    # expanded=True signifie qu'il est ouvert par défaut. Mets False pour le fermer.
     with st.expander("🔐 1. Authentication", expanded=True):
         api_key = st.text_input("API Key", type="password", help="Starts with EZfX...")
 
-    # --- 2. TARGET (COLLAPSIBLE) ---
     with st.expander("🎯 2. Target", expanded=True):
         project_id = st.number_input("Project ID", value=689, step=1)
         mps_input = st.text_input("Point IDs", value="1797", help="Ex: 1797, 1798")
 
-    # --- 3. CONFIGURATION (COLLAPSIBLE) ---
     with st.expander("⚙️ 3. Settings", expanded=True):
-        # STD INDICATORS LIST
         STD_INDICATORS = [
             {"label": "LAeq (Avg)", "code": "LAeq", "method": "average"},
             {"label": "LAFMax (Max)", "code": "LAFMax", "method": "max"},
@@ -92,10 +79,10 @@ with st.sidebar:
     st.markdown("")
     btn_run = st.button("🚀 LOAD DATA", type="primary", use_container_width=True)
 
-# --- MAIN PAGE TITLE ---
+# --- MAIN TITLE ---
 st.title(f"Project #{project_id} - Data Dashboard")
 
-# --- CORE FUNCTION ---
+# --- DATA FETCHING ---
 def get_cadence_data(api_key, proj_id, mp_ids, start_date, end_date, agg_time, selected_labels, ref_indicators):
     dt_start = datetime.combine(start_date, time.min)
     dt_end = datetime.combine(end_date + timedelta(days=1), time.min)
@@ -128,9 +115,8 @@ def get_cadence_data(api_key, proj_id, mp_ids, start_date, end_date, agg_time, s
             if not data.get('timeStamp'): return None
             
             df = pd.DataFrame({'Date': pd.to_datetime(data['timeStamp'])})
-            df['Date'] = df['Date'].dt.tz_localize(None) # Remove Timezone
+            df['Date'] = df['Date'].dt.tz_localize(None) 
             
-            # Filter Strict Date Range
             mask = (df['Date'] >= dt_start) & (df['Date'] < dt_end)
             
             for item in data.get('indicators', []):
@@ -176,7 +162,7 @@ if btn_run:
         if selected_inds_15m:
             st.session_state['df_15m'] = get_cadence_data(api_key, project_id, mp_ids_list, d_start, d_end, 900, selected_inds_15m, STD_INDICATORS)
 
-# --- VISUALIZATION (50/50 SPLIT) ---
+# --- VISUALIZATION ---
 if st.session_state['df_1h'] is not None or st.session_state['df_15m'] is not None:
     
     t1, t2 = st.tabs(["⏱️ Hourly Data (1h)", "⚡ Short Data (15min)"])
@@ -196,22 +182,3 @@ if st.session_state['df_1h'] is not None or st.session_state['df_15m'] is not No
             x_max = datetime.combine(d_end + timedelta(days=1), time.min)
             
             fig.update_layout(
-                title=f"Evolution {title_suffix}", xaxis_title="Time", yaxis_title="Level (dB)",
-                xaxis=dict(range=[x_min, x_max]), height=500,
-                margin=dict(l=20, r=20, t=40, b=20),
-                template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                legend=dict(orientation="h", y=1.1), hovermode="x unified"
-            )
-            st.plotly_chart(fig, use_container_width=True)
-
-        with col_table:
-            st.markdown(f"**Data Table** ({len(df)} rows)")
-            csv = df.to_csv().encode('utf-8')
-            st.download_button("📥 CSV Export", csv, f"Cadence_{title_suffix}_{project_id}.csv", "text/csv", "primary", use_container_width=True)
-            st.dataframe(df, height=450, use_container_width=True)
-
-    with t1: render_dashboard(st.session_state['df_1h'], "1h")
-    with t2: render_dashboard(st.session_state['df_15m'], "15min")
-
-else:
-    st.info("👈 Open the sections in the sidebar to configure and load data.")
