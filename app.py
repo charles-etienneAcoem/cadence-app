@@ -2,7 +2,7 @@ import streamlit as st
 import requests
 import pandas as pd
 import plotly.graph_objects as go
-from datetime import datetime, date, time
+from datetime import datetime, date, time, timedelta
 import itertools
 
 # --- PAGE CONFIGURATION ---
@@ -49,13 +49,15 @@ if 'df_15m' not in st.session_state: st.session_state['df_15m'] = None
 
 # --- FUNCTION: FETCH DATA ---
 def get_cadence_data(api_key, proj_id, mp_ids, start_date, end_date, agg_time, suffix):
-    """Fetches data and strictly clips it to the requested time range."""
+    """Fetches data and handles Timezone removal + Strict Filtering."""
     
-    # Define exact datetime boundaries
-    dt_start = datetime.combine(start_date, time.min) # 00:00:00
-    dt_end = datetime.combine(end_date, time.max)     # 23:59:59.999999
+    # 1. DEFINITION DES BORNES TEMPORELLES LOCALES
+    # Start: Date début à 00:00:00
+    dt_start = datetime.combine(start_date, time.min) 
+    # End: Date fin + 1 jour à 00:00:00 (pour inclure toute la journée de fin jusqu'à minuit)
+    dt_end = datetime.combine(end_date + timedelta(days=1), time.min)
     
-    # 1. Build Payload
+    # 2. Build Payload
     indicators = []
     for mp in mp_ids:
         indicators.append({
@@ -69,6 +71,7 @@ def get_cadence_data(api_key, proj_id, mp_ids, start_date, end_date, agg_time, s
             })
 
     # API Request (UTC ISO)
+    # On demande un peu plus large à l'API pour être sûr d'avoir tout, on filtrera après
     payload = {
         "start": f"{start_date}T00:00:00Z", "end": f"{end_date}T23:59:59Z",
         "aggregationTime": agg_time, "indicators": indicators
@@ -86,11 +89,15 @@ def get_cadence_data(api_key, proj_id, mp_ids, start_date, end_date, agg_time, s
             # Create DataFrame
             df = pd.DataFrame({'Date': pd.to_datetime(data['timeStamp'])})
             
-            # --- STRICT FILTERING ---
-            # Keep only data within the requested range
-            mask = (df['Date'] >= dt_start) & (df['Date'] <= dt_end)
-            # We filter the dataframe structure later, but first we need to align values
+            # --- CORRECTION DU BUG TIMEZONE ---
+            # On supprime l'info UTC pour avoir des dates "naïves" comparables avec dt_start/dt_end
+            df['Date'] = df['Date'].dt.tz_localize(None)
             
+            # --- STRICT FILTERING ---
+            # On garde : Date >= Debut ET Date < Fin (lendemain minuit)
+            mask = (df['Date'] >= dt_start) & (df['Date'] < dt_end)
+            
+            # --- PARSE INDICATORS ---
             for item in data.get('indicators', []):
                 # ID/Name logic
                 mp_name = "Unknown"
@@ -109,12 +116,9 @@ def get_cadence_data(api_key, proj_id, mp_ids, start_date, end_date, agg_time, s
                     final_vals = raw_vals[0] if (isinstance(raw_vals, list) and len(raw_vals)>0 and isinstance(raw_vals[0], list)) else raw_vals
                     
                     if len(final_vals) == len(df):
-                        # Add column
                         df[col_name] = final_vals
-                    else:
-                        pass # Ignore mismatch size
-            
-            # Apply Filter NOW
+
+            # APPLIQUER LE FILTRE DE DATE MAINTENANT (sur les lignes)
             df = df.loc[mask].copy()
             
             if df.empty:
@@ -157,9 +161,10 @@ if st.session_state['df_1h'] is not None or st.session_state['df_15m'] is not No
     
     tab1, tab2 = st.tabs(["🕒 Hourly Data (1h)", "⏱️ Short Data (15min)"])
     
-    # Calculate Axis Boundaries (Force 00:00 to 23:59)
+    # CALCUL DES LIMITES DU GRAPHIQUE
+    # On force l'axe X à aller de (DateDébut 00:00) à (DateFin +1j 00:00)
     x_axis_min = datetime.combine(d_start, time.min)
-    x_axis_max = datetime.combine(d_end, time.max)
+    x_axis_max = datetime.combine(d_end + timedelta(days=1), time.min)
     
     # --- TAB 1: HOURLY ---
     with tab1:
@@ -180,7 +185,7 @@ if st.session_state['df_1h'] is not None or st.session_state['df_15m'] is not No
             fig.update_layout(
                 title=f"Hourly Evolution ({d_start} to {d_end})",
                 xaxis_title="Time", yaxis_title="dB",
-                # FORCE EXACT RANGE
+                # FORCER L'AXE X FIXE
                 xaxis=dict(range=[x_axis_min, x_axis_max]),
                 height=500, hovermode="x unified",
                 template="plotly_dark",
@@ -216,7 +221,7 @@ if st.session_state['df_1h'] is not None or st.session_state['df_15m'] is not No
             fig.update_layout(
                 title=f"15min Evolution ({d_start} to {d_end})",
                 xaxis_title="Time", yaxis_title="dB",
-                # FORCE EXACT RANGE
+                # FORCER L'AXE X FIXE
                 xaxis=dict(range=[x_axis_min, x_axis_max]),
                 height=500, hovermode="x unified",
                 template="plotly_dark",
