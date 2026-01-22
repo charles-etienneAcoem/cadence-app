@@ -5,23 +5,37 @@ import plotly.graph_objects as go
 from datetime import datetime, date, time, timedelta
 import itertools
 
-# --- 1. PAGE CONFIG & CSS HACK (COMPACT MODE) ---
-st.set_page_config(page_title="Cadence Pro Dashboard", page_icon="🎛️", layout="wide")
-
-# CSS pour réduire les marges et l'espace vide
-st.markdown("""
-    <style>
-        .block-container { padding-top: 1rem; padding-bottom: 0rem; padding-left: 2rem; padding-right: 2rem; }
-        [data-testid="stSidebar"] { padding-top: 0rem; width: 300px; }
-        .stButton button { width: 100%; border-radius: 5px; }
-        h1 { margin-top: -30px; font-size: 2rem !important; }
-        h3 { font-size: 1.2rem !important; margin-bottom: 5px; }
-    </style>
-""", unsafe_allow_html=True)
-
 # --- ASSETS ---
 ACOEM_LOGO = "https://cdn.bfldr.com/Q3Z2TZY7/at/2rg3rwh4gcnrvn5gkh8rckpp/ACOEM-LOGO-Brandsymbol-RGB-Orange.png?auto=webp&format=png"
+AECOM_LOGO = "https://zerionsoftware.com/wp-content/uploads/2023/10/aecom-logo.png"
 ACOEM_COLORS = ['#ff6952', '#2c5078', '#96c8de', '#FFB000', '#50C878'] 
+
+# --- 1. PAGE CONFIGURATION ---
+# Titre de l'onglet et Favicon Acoem
+st.set_page_config(
+    page_title="Cadence Data", 
+    page_icon=ACOEM_LOGO, 
+    layout="wide"
+)
+
+# --- 2. CSS HACKS (COMPACT HEADER & SIDEBAR) ---
+st.markdown("""
+    <style>
+        /* Réduire l'espace en haut de la page principale */
+        .block-container { padding-top: 1rem; padding-bottom: 0rem; }
+        
+        /* Réduire l'espace en haut de la sidebar */
+        [data-testid="stSidebarUserContent"] { padding-top: 1rem; }
+        
+        /* Alignement des logos */
+        .logo-container { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 5px; }
+        .powered-by { text-align: center; font-size: 0.8rem; font-weight: bold; color: #555; margin-bottom: 20px; }
+        
+        /* Ajustement des titres */
+        h1 { font-size: 1.8rem !important; }
+        h3 { font-size: 1.2rem !important; }
+    </style>
+""", unsafe_allow_html=True)
 
 # --- SESSION STATE ---
 if 'df_1h' not in st.session_state: st.session_state['df_1h'] = None
@@ -29,10 +43,15 @@ if 'df_15m' not in st.session_state: st.session_state['df_15m'] = None
 
 # --- SIDEBAR ---
 with st.sidebar:
-    c_logo, c_title = st.columns([1, 4])
-    with c_logo: st.image(ACOEM_LOGO, width=40)
-    with c_title: st.markdown("**Cadence Data**")
-    
+    # --- HEADER BRANDING ---
+    # Affichage des deux logos côte à côte
+    col_l1, col_l2 = st.columns(2)
+    with col_l1:
+        st.image(AECOM_LOGO, use_container_width=True)
+    with col_l2:
+        st.image(ACOEM_LOGO, use_container_width=True)
+        
+    st.markdown("<div class='powered-by'>AECOM powered by Acoem</div>", unsafe_allow_html=True)
     st.markdown("---")
     
     # 1. AUTH
@@ -43,9 +62,9 @@ with st.sidebar:
     mps_input = st.text_input("Point IDs", value="1797", help="Ex: 1797, 1798")
 
     st.markdown("---")
-    st.markdown("**📊 Indicators Selection**")
+    st.markdown("**📊 Indicators**")
 
-    # DEFINITION DES INDICATEURS DISPONIBLES (STANDARD CADENCE)
+    # STD INDICATORS LIST
     STD_INDICATORS = [
         {"label": "LAeq (Avg)", "code": "LAeq", "method": "average"},
         {"label": "LAFMax (Max)", "code": "LAFMax", "method": "max"},
@@ -79,7 +98,7 @@ with st.sidebar:
     st.markdown("")
     btn_run = st.button("🚀 LOAD DATA", type="primary")
 
-# --- MAIN TITLE ---
+# --- MAIN PAGE TITLE ---
 st.title(f"Project #{project_id} - Data Dashboard")
 
 # --- CORE FUNCTION ---
@@ -141,7 +160,9 @@ def get_cadence_data(api_key, proj_id, mp_ids, start_date, end_date, agg_time, s
                 mp_name = str(item.get('measurementPointId'))
                 if 'measurementPoint' in item:
                     mp_name = item['measurementPoint'].get('measurementPointName', mp_name)
-                
+                elif 'measurementPointId' in item: # Fallback
+                     mp_name = str(item['measurementPointId'])
+
                 # Resolve Type
                 dtype = item.get('primaryData', 'Val')
                 if 'indicatorDescription' in item:
@@ -198,20 +219,20 @@ if btn_run:
                 api_key, project_id, mp_ids_list, d_start, d_end, 900, selected_inds_15m, STD_INDICATORS
             )
 
-# --- VISUALIZATION (SIDE BY SIDE) ---
+# --- VISUALIZATION (50/50 SPLIT) ---
 if st.session_state['df_1h'] is not None or st.session_state['df_15m'] is not None:
     
     # Definition des Onglets
     t1, t2 = st.tabs(["⏱️ Hourly Data (1h)", "⚡ Short Data (15min)"])
     
-    # Helper pour afficher Graph + Tableau cote a cote
+    # Helper pour afficher Graph + Tableau cote a cote (50/50)
     def render_dashboard(df, title_suffix):
         if df is None:
             st.info("No data fetched for this aggregation.")
             return
 
-        # Layout: Graph (70%) | Table (30%)
-        col_graph, col_table = st.columns([7, 3])
+        # Layout: Graph (50%) | Table (50%)
+        col_graph, col_table = st.columns([1, 1])
         
         # --- LEFT: GRAPH ---
         with col_graph:
@@ -226,14 +247,14 @@ if st.session_state['df_1h'] is not None or st.session_state['df_15m'] is not No
                     line=dict(width=2, color=next(colors))
                 ))
             
-            # Force X Axis
+            # Force X Axis (Strict Range)
             x_min = datetime.combine(d_start, time.min)
             x_max = datetime.combine(d_end + timedelta(days=1), time.min)
             
             fig.update_layout(
                 title=f"Evolution {title_suffix}",
                 xaxis_title="Time", yaxis_title="Level (dB)",
-                xaxis=dict(range=[x_min, x_max]),
+                xaxis=dict(range=[x_min, x_max]), # Lock range
                 height=500, # Hauteur fixe
                 margin=dict(l=20, r=20, t=40, b=20),
                 template="plotly_dark",
@@ -247,10 +268,10 @@ if st.session_state['df_1h'] is not None or st.session_state['df_15m'] is not No
         with col_table:
             st.markdown(f"**Data Table** ({len(df)} rows)")
             
-            # Export Button
+            # Export Button (Top)
             csv = df.to_csv().encode('utf-8')
             st.download_button(
-                label="📥 CSV",
+                label="📥 CSV Export",
                 data=csv,
                 file_name=f"Cadence_{title_suffix}_{project_id}.csv",
                 mime="text/csv",
@@ -258,7 +279,7 @@ if st.session_state['df_1h'] is not None or st.session_state['df_15m'] is not No
                 use_container_width=True
             )
             
-            # Table (Compact height to match graph)
+            # Table (50% width, matched height)
             st.dataframe(df, height=450, use_container_width=True)
 
     # --- RENDER TABS ---
