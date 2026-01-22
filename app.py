@@ -22,14 +22,22 @@ st.markdown("""
     <style>
         .block-container { padding-top: 2rem; padding-bottom: 1rem; }
         [data-testid="stSidebarUserContent"] { padding-top: 1rem; }
+        
+        /* Style texte Powered By */
         .powered-text {
-            text-align: center; color: white; font-size: 0.7rem; /* Plus petit */
-            margin-top: 8px; margin-bottom: 2px; font-style: italic; opacity: 0.7;
+            color: white; 
+            font-size: 0.75rem; 
+            font-style: italic; 
+            opacity: 0.8;
+            margin-right: 8px; /* Espace entre texte et logo */
         }
+        
+        /* Conteneur AECOM (Haut) */
         .aecom-container {
             background-color: white; padding: 12px; border-radius: 6px;
-            display: flex; justify-content: center; align-items: center; margin-bottom: 0px;
+            display: flex; justify-content: center; align-items: center; margin-bottom: 5px;
         }
+        
         .streamlit-expanderHeader {
             font-size: 1rem; font-weight: bold; color: #ff6952;
         }
@@ -59,17 +67,16 @@ def get_project_name(api_key, proj_id):
 
 # --- SIDEBAR ---
 with st.sidebar:
-    # 1. BRANDING (AECOM GROS / ACOEM PETIT)
+    # 1. BRANDING (AECOM)
     st.markdown(f"""
         <div class="aecom-container"><img src="{AECOM_LOGO}" style="width: 100%; max-width: 160px;"></div>
     """, unsafe_allow_html=True)
     
-    st.markdown('<div class="powered-text">Powered by</div>', unsafe_allow_html=True)
-    
-    # LOGO ACOEM EN TOUT PETIT (HTML pour contrôle précis)
+    # 2. BRANDING LIGNE (Powered by + Logo Acoem)
     st.markdown(f"""
-        <div style="display: flex; justify-content: center;">
-            <img src="{ACOEM_LOGO_NEW}" style="width: 70px; border-radius: 4px;">
+        <div style="display: flex; align-items: center; justify-content: center; margin-top: 8px; margin-bottom: 10px;">
+            <span class="powered-text">Powered by</span>
+            <img src="{ACOEM_LOGO_NEW}" style="width: 60px; border-radius: 3px;">
         </div>
     """, unsafe_allow_html=True)
     
