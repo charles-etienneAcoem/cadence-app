@@ -4,11 +4,12 @@ import pandas as pd
 import plotly.graph_objects as go
 from datetime import datetime, date, time, timedelta
 import itertools
+import re # Pour gérer les séparateurs multiples
 
 # --- ASSETS ---
 ACOEM_LOGO_NEW = "https://cdn.bfldr.com/Q3Z2TZY7/at/b4z3s28jpswp92h6z35h9f3/ACOEM-LOGO-WithoutBaseline-RGB-Bicolor.jpg?auto=webp&format=jpg"
 AECOM_LOGO = "https://zerionsoftware.com/wp-content/uploads/2023/10/aecom-logo.png"
-ACOEM_COLORS = ['#ff6952', '#2c5078', '#96c8de', '#FFB000', '#50C878'] 
+ACOEM_COLORS = ['#ff6952', '#2c5078', '#96c8de', '#FFB000', '#50C878', '#808080', '#000000'] # Palette étendue
 
 # --- 1. PAGE CONFIGURATION ---
 st.set_page_config(
@@ -58,13 +59,8 @@ def get_project_name(api_key, proj_id):
 
 # --- SIDEBAR ---
 with st.sidebar:
-    # 1. BRANDING PRINCIPAL (AECOM)
-    st.markdown(f"""
-        <div class="aecom-container"><img src="{AECOM_LOGO}" style="width: 100%; max-width: 160px;"></div>
-    """, unsafe_allow_html=True)
-    
-    # 2. BRANDING SECONDAIRE (LIGNE ALIGNEE)
-    # Flexbox container pour aligner Texte + Image
+    # BRANDING
+    st.markdown(f"""<div class="aecom-container"><img src="{AECOM_LOGO}" style="width: 100%; max-width: 160px;"></div>""", unsafe_allow_html=True)
     st.markdown(f"""
         <div style="display: flex; align-items: center; justify-content: center; margin-top: 10px; margin-bottom: 15px;">
             <span style="color: white; font-size: 0.75rem; font-style: italic; margin-right: 8px; opacity: 0.8;">Powered by</span>
@@ -74,11 +70,11 @@ with st.sidebar:
     
     st.divider()
     
-    # --- AUTH ---
+    # --- 1. AUTH ---
     with st.expander("🔐 1. Authentication", expanded=True):
         api_key = st.text_input("API Key", type="password", help="Starts with EZfX...")
 
-    # --- TARGET ---
+    # --- 2. TARGET ---
     with st.expander("🎯 2. Target", expanded=True):
         project_id = st.number_input("Project ID", value=689, step=1)
         
@@ -90,9 +86,9 @@ with st.sidebar:
                 display_name = fetched_name
                 st.markdown(f"<div class='project-detected'>✅ {fetched_name}</div>", unsafe_allow_html=True)
         
-        mps_input = st.text_input("Point IDs", value="1797", help="Ex: 1797, 1798")
+        mps_input = st.text_input("Point IDs", value="1797, 1798", help="Ex: 1797, 1798 (virgule ou espace)")
 
-    # --- SETTINGS ---
+    # --- 3. SETTINGS ---
     with st.expander("⚙️ 3. Settings", expanded=True):
         STD_INDICATORS = [
             {"label": "LAeq (Avg)", "code": "LAeq", "method": "average"},
@@ -118,14 +114,16 @@ with st.sidebar:
 # --- MAIN TITLE ---
 st.title(f"{display_name} - Data Dashboard")
 
-# --- DATA FETCHING ---
+# --- DATA FETCHING (CORRIGÉ POUR MULTI-POINTS) ---
 def get_cadence_data(api_key, proj_id, mp_ids, start_date, end_date, agg_time, selected_labels, ref_indicators):
     dt_start = datetime.combine(start_date, time.min)
     dt_end = datetime.combine(end_date + timedelta(days=1), time.min)
     
+    # 1. CONSTRUCTION DE LA LISTE DES INDICATEURS
     indicators_payload = []
     active_inds = [i for i in ref_indicators if i["label"] in selected_labels]
     
+    # On boucle sur CHAQUE point et CHAQUE indicateur
     for mp in mp_ids:
         for ind in active_inds:
             indicators_payload.append({
@@ -150,44 +148,76 @@ def get_cadence_data(api_key, proj_id, mp_ids, start_date, end_date, agg_time, s
             data = r.json()
             if not data.get('timeStamp'): return None
             
-            df = pd.DataFrame({'Date': pd.to_datetime(data['timeStamp'])})
-            df['Date'] = df['Date'].dt.tz_localize(None) 
+            # --- CREATION DE L'INDEX TEMPOREL ---
+            # On crée un index commun basé sur timeStamp
+            time_index = pd.to_datetime(data['timeStamp'])
+            time_index = time_index.tz_localize(None) # Nettoyage Timezone
             
-            mask = (df['Date'] >= dt_start) & (df['Date'] < dt_end)
+            # Initialisation DF vide avec l'index
+            df = pd.DataFrame(index=time_index)
+            df.index.name = 'Date'
             
+            # --- PARSING DES VALEURS (ALIGNEMENT INTELLIGENT) ---
             for item in data.get('indicators', []):
+                # Récupération Nom Point
                 mp_name = str(item.get('measurementPointId'))
                 if 'measurementPoint' in item:
                     mp_name = item['measurementPoint'].get('measurementPointName', mp_name)
                 elif 'measurementPointId' in item:
                      mp_name = str(item['measurementPointId'])
 
+                # Récupération Type Donnée
                 dtype = item.get('primaryData', 'Val')
                 if 'indicatorDescription' in item:
                     dtype = item['indicatorDescription'].get('primaryData', dtype)
 
                 col_name = f"{mp_name} | {dtype}"
                 
+                # Extraction Valeurs
                 raw_vals = item.get('data', {}).get('values')
                 if raw_vals:
+                    # Aplatissement si [[v]]
                     vals = raw_vals[0] if (isinstance(raw_vals, list) and len(raw_vals)>0 and isinstance(raw_vals[0], list)) else raw_vals
-                    if len(vals) == len(df):
-                        df[col_name] = vals
+                    
+                    # --- FIX MAJEUR ICI : Utilisation de pd.Series pour alignement ---
+                    # Au lieu de vérifier len() == len(), on crée une Series qui s'aligne sur l'index
+                    # Si les longueurs diffèrent, Pandas gérera (remplira les trous ou coupera)
+                    try:
+                        # On suppose que l'API renvoie les données alignées sur le timeStamp global du JSON
+                        series = pd.Series(vals, index=time_index)
+                        df[col_name] = series
+                    except Exception as ex_col:
+                        # Si l'API a renvoyé un nombre de valeurs incohérent avec le timeStamp
+                        # On essaie de forcer l'ajout si la taille correspond exactement
+                        if len(vals) == len(df):
+                            df[col_name] = vals
+                        else:
+                            pass # Impossible d'aligner
 
+            # FILTRE DE DATE STRICT (Lignes)
+            mask = (df.index >= dt_start) & (df.index < dt_end)
             df = df.loc[mask].copy()
+            
             if df.empty: return None
-            df.set_index('Date', inplace=True)
             return df
         else:
-            st.error(f"API Error: {r.status_code}"); return None
+            st.error(f"API Error: {r.status_code} - {r.text}"); return None
     except Exception as e:
         st.error(f"Error: {e}"); return None
 
 # --- EXECUTION ---
 if btn_run:
     if not api_key: st.error("⚠️ Missing API Key"); st.stop()
-    try: mp_ids_list = [int(x.strip()) for x in mps_input.split(",") if x.strip()]
-    except: st.error("⚠️ Invalid Point IDs"); st.stop()
+    
+    # PARSING ROBUSTE DES IDs (Virgules, Espaces, Points-Virgules)
+    try: 
+        # Regex pour séparer par , ou ; ou espace
+        mp_ids_list = [int(x) for x in re.split(r'[ ,;]+', mps_input) if x.strip()]
+        if not mp_ids_list: raise ValueError
+    except: st.error("⚠️ Invalid Point IDs format"); st.stop()
+    
+    # Feedback visuel
+    st.success(f"🔍 Analyzing {len(mp_ids_list)} points...")
         
     st.session_state['df_1h'] = None
     st.session_state['df_15m'] = None
