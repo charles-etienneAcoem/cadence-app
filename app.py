@@ -8,7 +8,6 @@ import re
 
 # --- ASSETS ---
 ACOEM_LOGO_NEW = "https://cdn.bfldr.com/Q3Z2TZY7/at/b4z3s28jpswp92h6z35h9f3/ACOEM-LOGO-WithoutBaseline-RGB-Bicolor.jpg?auto=webp&format=jpg"
-AECOM_LOGO = "https://zerionsoftware.com/wp-content/uploads/2023/10/aecom-logo.png"
 ACOEM_COLORS = ['#ff6952', '#2c5078', '#96c8de', '#FFB000', '#50C878', '#808080', '#000000']
 
 # --- 1. PAGE CONFIGURATION ---
@@ -24,9 +23,9 @@ st.markdown("""
         .block-container { padding-top: 2rem; padding-bottom: 1rem; }
         [data-testid="stSidebarUserContent"] { padding-top: 1rem; }
         
-        .aecom-container {
+        .logo-container {
             background-color: white; padding: 12px; border-radius: 6px;
-            display: flex; justify-content: center; align-items: center; margin-bottom: 5px;
+            display: flex; justify-content: center; align-items: center; margin-bottom: 20px;
         }
         
         .streamlit-expanderHeader {
@@ -59,14 +58,10 @@ def get_project_name(api_key, proj_id):
 
 # --- SIDEBAR ---
 with st.sidebar:
-    # BRANDING
-    st.markdown(f"""<div class="aecom-container"><img src="{AECOM_LOGO}" style="width: 100%; max-width: 160px;"></div>""", unsafe_allow_html=True)
-    
-    # LIGNE POWERED BY
+    # BRANDING ACOEM ONLY
     st.markdown(f"""
-        <div style="display: flex; align-items: center; justify-content: center; margin-top: 10px; margin-bottom: 15px;">
-            <span style="color: white; font-size: 0.75rem; font-style: italic; margin-right: 8px; opacity: 0.8;">Powered by</span>
-            <img src="{ACOEM_LOGO_NEW}" style="width: 60px; border-radius: 3px;">
+        <div class="logo-container">
+            <img src="{ACOEM_LOGO_NEW}" style="width: 100%; max-width: 160px;">
         </div>
     """, unsafe_allow_html=True)
     
@@ -155,15 +150,12 @@ def get_cadence_data(api_key, proj_id, mp_ids, start_date, end_date, agg_time, s
             df.index.name = 'Date'
             
             for item in data.get('indicators', []):
-                # --- MODIFICATION ICI : PRIORITE AU SHORT NAME ---
-                mp_label = str(item.get('measurementPointId')) # Fallback ID
+                mp_label = str(item.get('measurementPointId'))
                 
                 if 'measurementPoint' in item:
                     mp_obj = item['measurementPoint']
-                    # On prend le ShortName s'il existe, sinon Name, sinon ID
                     mp_label = mp_obj.get('measurementPointShortName') or mp_obj.get('measurementPointName') or mp_label
                 
-                # Type Donnée
                 dtype = item.get('primaryData', 'Val')
                 if 'indicatorDescription' in item:
                     dtype = item['indicatorDescription'].get('primaryData', dtype)
@@ -179,7 +171,6 @@ def get_cadence_data(api_key, proj_id, mp_ids, start_date, end_date, agg_time, s
                     except:
                         if len(vals) == len(df): df[col_name] = vals
 
-            # Filter Strict Date Range
             mask = (df.index >= dt_start) & (df.index < dt_end)
             df = df.loc[mask].copy()
             
