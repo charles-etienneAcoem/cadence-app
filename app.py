@@ -213,7 +213,7 @@ def get_cadence_alerts(api_key, dash_id, start_date, end_date):
                 offset += len(data)
                 
                 if len(data) < limit:
-                    break # Pas plus d'alertes
+                    break
             else:
                 st.error(f"Alerts API Error: {r.status_code} - {r.text}")
                 break
@@ -225,7 +225,6 @@ def get_cadence_alerts(api_key, dash_id, start_date, end_date):
         return None
         
     return pd.json_normalize(all_alerts)
-
 
 # --- EXECUTION ---
 if btn_run:
@@ -248,7 +247,6 @@ if btn_run:
         if selected_inds_15m:
             st.session_state['df_15m'] = get_cadence_data(api_key, project_id, mp_ids_list, d_start, d_end, 900, selected_inds_15m, STD_INDICATORS)
             
-        # Récupération des alertes
         st.session_state['df_alerts'] = get_cadence_alerts(api_key, dashboard_id, d_start, d_end)
 
 
@@ -298,47 +296,97 @@ if st.session_state['df_1h'] is not None or st.session_state['df_15m'] is not No
 
     def render_alerts(df):
         if df is None or df.empty:
-            st.info("No alerts found for this period.")
+            st.info("Aucune alerte trouvée pour cette période.")
             return
             
-        # Chercher la colonne correspondant au nom du point de mesure
+        df_clean = df.copy()
+        
+        # --- PREPARATION DES COLONNES ---
         point_col = 'data.measurePointData.name'
         if point_col not in df.columns:
-            if 'data.measurePointName' in df.columns:
-                point_col = 'data.measurePointName'
-            else:
-                point_col = 'deviceEventId' # Fallback
+            point_col = 'data.measurePointName' if 'data.measurePointName' in df.columns else 'deviceEventId'
                 
-        # Préparation des données pour le graphique
-        df_clean = df.copy()
-        df_clean['Point'] = df_clean[point_col].fillna('Unknown') if point_col in df_clean.columns else 'Unknown'
-        df_clean['Type'] = df_clean['type'].fillna('Unknown') if 'type' in df_clean.columns else 'Unknown'
+        df_clean['Point'] = df_clean[point_col].fillna('Inconnu') if point_col in df_clean.columns else 'Inconnu'
+        df_clean['Type'] = df_clean['type'].fillna('Inconnu') if 'type' in df_clean.columns else 'Inconnu'
         
-        # Groupement Point de mesure / Type d'alerte
-        summary = df_clean.groupby(['Point', 'Type']).size().reset_index(name='Count')
+        # Sécurisation de l'existence des champs
+        has_validated = 'validated' in df_clean.columns
+        has_closed = 'closed' in df_clean.columns
+        has_identified = 'identified' in df_clean.columns
+        has_source = 'sourceRecognitionId' in df_clean.columns
+
+        # --- CALCUL DES METRIQUES ---
+        total_alerts = len(df_clean)
         
+        if has_validated:
+            nb_validated = df_clean['validated'].fillna(False).astype(bool).sum()
+            nb_unvalidated = total_alerts - nb_validated
+        else:
+            nb_validated = "N/A"
+            nb_unvalidated = "N/A"
+            
+        if has_closed:
+            nb_open = (~df_clean['closed'].fillna(False).astype(bool)).sum()
+        else:
+            nb_open = "N/A"
+
+        # --- AFFICHAGE DES COMPTEURS ---
+        st.markdown("### 📊 Résumé des statuts")
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Total des alertes", total_alerts)
+        m2.metric("✅ Alertes Validées", nb_validated)
+        m3.metric("⏳ Non Validées", nb_unvalidated)
+        m4.metric("🚨 Ouvertes (à traiter)", nb_open)
+        
+        st.divider()
+
+        # --- GRAPHIQUES ---
         col1, col2 = st.columns(2)
+        
         with col1:
-            st.markdown("### Alerts Overview")
-            fig = go.Figure()
+            st.markdown("#### Nombre d'alertes par Point et Type")
+            summary = df_clean.groupby(['Point', 'Type']).size().reset_index(name='Count')
+            fig_bar = go.Figure()
             for t in summary['Type'].unique():
                 df_t = summary[summary['Type'] == t]
-                fig.add_trace(go.Bar(x=df_t['Point'], y=df_t['Count'], name=t))
+                fig_bar.add_trace(go.Bar(x=df_t['Point'], y=df_t['Count'], name=t))
             
-            fig.update_layout(
-                barmode='stack', title="Alerts by Measurement Point & Type",
-                xaxis_title="Measurement Point", yaxis_title="Number of Alerts",
+            fig_bar.update_layout(
+                barmode='stack',
                 template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
                 legend=dict(orientation="h", y=1.1)
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig_bar, use_container_width=True)
             
         with col2:
-            st.markdown("### Summary Table")
-            st.dataframe(summary, use_container_width=True)
+            st.markdown("#### Répartition des Sources Identifiées")
+            if has_identified and has_source:
+                # Filtrer seulement les alertes qui ont été identifiées
+                df_ident = df_clean[df_clean['identified'].fillna(False).astype(bool) == True].copy()
+                
+                if not df_ident.empty:
+                    df_ident[has_source] = df_ident[has_source].replace({None: 'Inconnu', '': 'Inconnu', float('nan'): 'Inconnu'})
+                    pie_data = df_ident.groupby(has_source).size().reset_index(name='Count')
+                    
+                    fig_pie = go.Figure(data=[go.Pie(
+                        labels=pie_data[has_source], 
+                        values=pie_data['Count'], 
+                        hole=.4,
+                        marker=dict(colors=ACOEM_COLORS)
+                    )])
+                    
+                    fig_pie.update_layout(
+                        template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                        legend=dict(orientation="h", y=1.1)
+                    )
+                    st.plotly_chart(fig_pie, use_container_width=True)
+                else:
+                    st.info("Aucune alerte n'est marquée comme identifiée pour générer le graphique.")
+            else:
+                st.warning("Informations sur l'identification de la source indisponibles dans ces données.")
             
         st.divider()
-        st.markdown("### Raw Alerts Data")
+        st.markdown("### 📋 Données Brutes des Alertes")
         st.dataframe(df, use_container_width=True)
 
     with t1: render_dashboard(st.session_state['df_1h'], "1h Data")
