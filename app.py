@@ -57,27 +57,117 @@ def get_project_name(api_key, proj_id):
         pass
     return None
 
+# --- TRANSLATIONS ---
+translations = {
+    "Español": {
+        "auth_title": "🔐 1. Autenticación",
+        "api_key": "Clave API",
+        "api_help": "Empieza con EZfX...",
+        "target_title": "🎯 2. Objetivo",
+        "proj_id": "ID del Proyecto",
+        "dash_id": "ID del Dashboard (Para Alertas)",
+        "points": "IDs de los Puntos",
+        "points_help": "Ej: 1797, 1798",
+        "settings_title": "⚙️ 3. Configuración",
+        "metrics": "Selección de Métricas:",
+        "hourly": "Por Hora (1h)",
+        "short": "Corto (15min)",
+        "time_range": "Rango de Tiempo:",
+        "start": "Inicio",
+        "end": "Fin",
+        "btn_load": "🚀 CARGAR DATOS",
+        "dashboard_title": "Dashboard de Datos",
+        "tab_1h": "⏱️ Datos por Hora (1h)",
+        "tab_15m": "⚡ Datos Cortos (15min)",
+        "tab_alerts": "🚨 Alertas",
+        "no_data": "No se obtuvieron datos.",
+        "data_table": "Tabla de Datos",
+        "rows": "filas",
+        "export": "📥 Exportar CSV",
+        "missing_key": "⚠️ Falta la Clave API",
+        "invalid_points": "⚠️ Formato de IDs de Puntos inválido",
+        "analyzing": "🔍 Analizando {} puntos...",
+        "fetching": "Obteniendo datos de la nube...",
+        "no_alerts": "No se encontraron alertas para este período.",
+        "unknown": "Desconocido",
+        "status_summary": "### 📊 Resumen de estados",
+        "total_alerts": "Total de alertas",
+        "val_alerts": "✅ Alertas Validadas",
+        "unval_alerts": "⏳ No Validadas",
+        "open_alerts": "🚨 Abiertas (a tratar)",
+        "chart_title_1": "#### Número de alertas por Punto y Tipo",
+        "chart_title_2": "#### Distribución de Fuentes Identificadas",
+        "no_ident": "Ninguna alerta está marcada como identificada para generar el gráfico.",
+        "no_source_info": "Información sobre la identificación de la fuente no disponible en estos datos.",
+        "raw_data": "### 📋 Datos Brutos de las Alertas"
+    },
+    "Català": {
+        "auth_title": "🔐 1. Autenticació",
+        "api_key": "Clau API",
+        "api_help": "Comença amb EZfX...",
+        "target_title": "🎯 2. Objectiu",
+        "proj_id": "ID del Projecte",
+        "dash_id": "ID del Dashboard (Per a Alertes)",
+        "points": "IDs dels Punts",
+        "points_help": "Ex: 1797, 1798",
+        "settings_title": "⚙️ 3. Configuració",
+        "metrics": "Selecció de Mètriques:",
+        "hourly": "Per Hora (1h)",
+        "short": "Curt (15min)",
+        "time_range": "Rang de Temps:",
+        "start": "Inici",
+        "end": "Fi",
+        "btn_load": "🚀 CARREGAR DADES",
+        "dashboard_title": "Dashboard de Dades",
+        "tab_1h": "⏱️ Dades per Hora (1h)",
+        "tab_15m": "⚡ Dades Curtes (15min)",
+        "tab_alerts": "🚨 Alertes",
+        "no_data": "No s'han obtingut dades.",
+        "data_table": "Taula de Dades",
+        "rows": "files",
+        "export": "📥 Exportar CSV",
+        "missing_key": "⚠️ Falta la Clau API",
+        "invalid_points": "⚠️ Format d'IDs de Punts invàlid",
+        "analyzing": "🔍 Analitzant {} punts...",
+        "fetching": "Obtenint dades del núvol...",
+        "no_alerts": "No s'han trobat alertes per a aquest període.",
+        "unknown": "Desconegut",
+        "status_summary": "### 📊 Resum d'estats",
+        "total_alerts": "Total d'alertes",
+        "val_alerts": "✅ Alertes Validades",
+        "unval_alerts": "⏳ No Validades",
+        "open_alerts": "🚨 Obertes (a tractar)",
+        "chart_title_1": "#### Nombre d'alertes per Punt i Tipus",
+        "chart_title_2": "#### Distribució de Fonts Identificades",
+        "no_ident": "Cap alerta està marcada com a identificada per generar el gràfic.",
+        "no_source_info": "Informació sobre la identificació de la font no disponible en aquestes dades.",
+        "raw_data": "### 📋 Dades Brutes de les Alertes"
+    }
+}
+
 # --- SIDEBAR ---
 with st.sidebar:
-    # BRANDING ACOEM ONLY
     st.markdown(f"""
         <div class="logo-container">
             <img src="{ACOEM_LOGO_NEW}" style="width: 100%; max-width: 160px;">
         </div>
     """, unsafe_allow_html=True)
     
+    # LANGUAGE SELECTOR
+    lang = st.selectbox("Idioma / Llengua", ["Español", "Català"])
+    t = translations[lang]
+    
     st.divider()
     
     # --- 1. AUTH ---
-    with st.expander("🔐 1. Authentication", expanded=True):
-        api_key = st.text_input("API Key", type="password", help="Starts with EZfX...")
+    with st.expander(t["auth_title"], expanded=True):
+        api_key = st.text_input(t["api_key"], type="password", help=t["api_help"])
 
     # --- 2. TARGET ---
-    with st.expander("🎯 2. Target", expanded=True):
-        project_id = st.number_input("Project ID", value=689, step=1)
-        dashboard_id = st.number_input("Dashboard ID (For Alerts)", value=1, step=1)
+    with st.expander(t["target_title"], expanded=True):
+        project_id = st.number_input(t["proj_id"], value=689, step=1)
+        dashboard_id = st.number_input(t["dash_id"], value=1, step=1)
         
-        # LOGIQUE NOM PROJET
         display_name = f"Project #{project_id}"
         if api_key:
             fetched_name = get_project_name(api_key, project_id)
@@ -85,10 +175,10 @@ with st.sidebar:
                 display_name = fetched_name
                 st.markdown(f"<div class='project-detected'>✅ {fetched_name}</div>", unsafe_allow_html=True)
         
-        mps_input = st.text_input("Point IDs", value="1797, 1798", help="Ex: 1797, 1798")
+        mps_input = st.text_input(t["points"], value="1797, 1798", help=t["points_help"])
 
     # --- 3. SETTINGS ---
-    with st.expander("⚙️ 3. Settings", expanded=True):
+    with st.expander(t["settings_title"], expanded=True):
         STD_INDICATORS = [
             {"label": "LAeq (Avg)", "code": "LAeq", "method": "average"},
             {"label": "LAFMax (Max)", "code": "LAFMax", "method": "max"},
@@ -97,21 +187,21 @@ with st.sidebar:
             {"label": "Lden (Avg)", "code": "Lden", "method": "average"}
         ]
         
-        st.caption("Metrics Selection:")
-        selected_inds_1h = st.multiselect("Hourly (1h)", [i["label"] for i in STD_INDICATORS], default=["LAeq (Avg)", "LAFMax (Max)"])
-        selected_inds_15m = st.multiselect("Short (15min)", [i["label"] for i in STD_INDICATORS], default=["LAeq (Avg)"])
+        st.caption(t["metrics"])
+        selected_inds_1h = st.multiselect(t["hourly"], [i["label"] for i in STD_INDICATORS], default=["LAeq (Avg)", "LAFMax (Max)"])
+        selected_inds_15m = st.multiselect(t["short"], [i["label"] for i in STD_INDICATORS], default=["LAeq (Avg)"])
         
         st.divider()
-        st.caption("Time Range:")
+        st.caption(t["time_range"])
         col_d1, col_d2 = st.columns(2)
-        d_start = col_d1.date_input("Start", date.today())
-        d_end = col_d2.date_input("End", date.today())
+        d_start = col_d1.date_input(t["start"], date.today())
+        d_end = col_d2.date_input(t["end"], date.today())
 
     st.markdown("")
-    btn_run = st.button("🚀 LOAD DATA", type="primary", use_container_width=True)
+    btn_run = st.button(t["btn_load"], type="primary", use_container_width=True)
 
 # --- MAIN TITLE ---
-st.title(f"{display_name} - Data Dashboard")
+st.title(f"{display_name} - {t['dashboard_title']}")
 
 # --- DATA FETCHING FUNCTIONS ---
 def get_cadence_data(api_key, proj_id, mp_ids, start_date, end_date, agg_time, selected_labels, ref_indicators):
@@ -228,20 +318,20 @@ def get_cadence_alerts(api_key, dash_id, start_date, end_date):
 
 # --- EXECUTION ---
 if btn_run:
-    if not api_key: st.error("⚠️ Missing API Key"); st.stop()
+    if not api_key: st.error(t["missing_key"]); st.stop()
     
     try: 
         mp_ids_list = [int(x) for x in re.split(r'[ ,;]+', mps_input) if x.strip()]
         if not mp_ids_list: raise ValueError
-    except: st.error("⚠️ Invalid Point IDs format"); st.stop()
+    except: st.error(t["invalid_points"]); st.stop()
     
-    st.success(f"🔍 Analyzing {len(mp_ids_list)} points...")
+    st.success(t["analyzing"].format(len(mp_ids_list)))
         
     st.session_state['df_1h'] = None
     st.session_state['df_15m'] = None
     st.session_state['df_alerts'] = None
     
-    with st.spinner("Fetching data from cloud..."):
+    with st.spinner(t["fetching"]):
         if selected_inds_1h:
             st.session_state['df_1h'] = get_cadence_data(api_key, project_id, mp_ids_list, d_start, d_end, 3600, selected_inds_1h, STD_INDICATORS)
         if selected_inds_15m:
@@ -253,10 +343,10 @@ if btn_run:
 # --- VISUALIZATION ---
 if st.session_state['df_1h'] is not None or st.session_state['df_15m'] is not None or st.session_state['df_alerts'] is not None:
     
-    t1, t2, t3 = st.tabs(["⏱️ Hourly Data (1h)", "⚡ Short Data (15min)", "🚨 Alerts"])
+    t1, t2, t3 = st.tabs([t["tab_1h"], t["tab_15m"], t["tab_alerts"]])
     
     def render_dashboard(df, title_suffix):
-        if df is None: st.info("No data fetched."); return
+        if df is None: st.info(t["no_data"]); return
 
         col_graph, col_table = st.columns([1, 1])
         
@@ -280,11 +370,11 @@ if st.session_state['df_1h'] is not None or st.session_state['df_15m'] is not No
             st.plotly_chart(fig, use_container_width=True)
 
         with col_table:
-            st.markdown(f"**Data Table** ({len(df)} rows)")
+            st.markdown(f"**{t['data_table']}** ({len(df)} {t['rows']})")
             csv = df.to_csv().encode('utf-8')
             unique_key = f"dl_btn_{title_suffix}"
             st.download_button(
-                label="📥 CSV Export",
+                label=t["export"],
                 data=csv,
                 file_name=f"Cadence_{title_suffix}_{project_id}.csv",
                 mime="text/csv",
@@ -296,7 +386,7 @@ if st.session_state['df_1h'] is not None or st.session_state['df_15m'] is not No
 
     def render_alerts(df):
         if df is None or df.empty:
-            st.info("Aucune alerte trouvée pour cette période.")
+            st.info(t["no_alerts"])
             return
             
         df_clean = df.copy()
@@ -306,10 +396,9 @@ if st.session_state['df_1h'] is not None or st.session_state['df_15m'] is not No
         if point_col not in df.columns:
             point_col = 'data.measurePointName' if 'data.measurePointName' in df.columns else 'deviceEventId'
                 
-        df_clean['Point'] = df_clean[point_col].fillna('Inconnu') if point_col in df_clean.columns else 'Inconnu'
-        df_clean['Type'] = df_clean['type'].fillna('Inconnu') if 'type' in df_clean.columns else 'Inconnu'
+        df_clean['Point'] = df_clean[point_col].fillna(t["unknown"]) if point_col in df_clean.columns else t["unknown"]
+        df_clean['Type'] = df_clean['type'].fillna(t["unknown"]) if 'type' in df_clean.columns else t["unknown"]
         
-        # Sécurisation de l'existence des champs
         has_validated = 'validated' in df_clean.columns
         has_closed = 'closed' in df_clean.columns
         has_identified = 'identified' in df_clean.columns
@@ -331,12 +420,12 @@ if st.session_state['df_1h'] is not None or st.session_state['df_15m'] is not No
             nb_open = "N/A"
 
         # --- AFFICHAGE DES COMPTEURS ---
-        st.markdown("### 📊 Résumé des statuts")
+        st.markdown(t["status_summary"])
         m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Total des alertes", total_alerts)
-        m2.metric("✅ Alertes Validées", nb_validated)
-        m3.metric("⏳ Non Validées", nb_unvalidated)
-        m4.metric("🚨 Ouvertes (à traiter)", nb_open)
+        m1.metric(t["total_alerts"], total_alerts)
+        m2.metric(t["val_alerts"], nb_validated)
+        m3.metric(t["unval_alerts"], nb_unvalidated)
+        m4.metric(t["open_alerts"], nb_open)
         
         st.divider()
 
@@ -344,12 +433,12 @@ if st.session_state['df_1h'] is not None or st.session_state['df_15m'] is not No
         col1, col2 = st.columns(2)
         
         with col1:
-            st.markdown("#### Nombre d'alertes par Point et Type")
+            st.markdown(t["chart_title_1"])
             summary = df_clean.groupby(['Point', 'Type']).size().reset_index(name='Count')
             fig_bar = go.Figure()
-            for t in summary['Type'].unique():
-                df_t = summary[summary['Type'] == t]
-                fig_bar.add_trace(go.Bar(x=df_t['Point'], y=df_t['Count'], name=t))
+            for type_alert in summary['Type'].unique():
+                df_t = summary[summary['Type'] == type_alert]
+                fig_bar.add_trace(go.Bar(x=df_t['Point'], y=df_t['Count'], name=type_alert))
             
             fig_bar.update_layout(
                 barmode='stack',
@@ -359,13 +448,12 @@ if st.session_state['df_1h'] is not None or st.session_state['df_15m'] is not No
             st.plotly_chart(fig_bar, use_container_width=True)
             
         with col2:
-            st.markdown("#### Répartition des Sources Identifiées")
+            st.markdown(t["chart_title_2"])
             if has_identified and has_source:
-                # Filtrer seulement les alertes qui ont été identifiées
                 df_ident = df_clean[df_clean['identified'].fillna(False).astype(bool) == True].copy()
                 
                 if not df_ident.empty:
-                    df_ident[has_source] = df_ident[has_source].replace({None: 'Inconnu', '': 'Inconnu', float('nan'): 'Inconnu'})
+                    df_ident[has_source] = df_ident[has_source].replace({None: t["unknown"], '': t["unknown"], float('nan'): t["unknown"]})
                     pie_data = df_ident.groupby(has_source).size().reset_index(name='Count')
                     
                     fig_pie = go.Figure(data=[go.Pie(
@@ -381,17 +469,19 @@ if st.session_state['df_1h'] is not None or st.session_state['df_15m'] is not No
                     )
                     st.plotly_chart(fig_pie, use_container_width=True)
                 else:
-                    st.info("Aucune alerte n'est marquée comme identifiée pour générer le graphique.")
+                    st.info(t["no_ident"])
             else:
-                st.warning("Informations sur l'identification de la source indisponibles dans ces données.")
+                st.warning(t["no_source_info"])
             
         st.divider()
-        st.markdown("### 📋 Données Brutes des Alertes")
+        st.markdown(t["raw_data"])
         st.dataframe(df, use_container_width=True)
 
-    with t1: render_dashboard(st.session_state['df_1h'], "1h Data")
-    with t2: render_dashboard(st.session_state['df_15m'], "15min Data")
+    with t1: render_dashboard(st.session_state['df_1h'], t["hourly"])
+    with t2: render_dashboard(st.session_state['df_15m'], t["short"])
     with t3: render_alerts(st.session_state['df_alerts'])
 
 else:
-    st.info("👈 Open the sections in the sidebar to configure and load data.")
+    lang = st.session_state.get('lang', 'Español')
+    msg = "👈 Abre las secciones en la barra lateral para configurar y cargar datos." if lang == 'Español' else "👈 Obre les seccions a la barra lateral per configurar i carregar dades."
+    st.info(msg)
