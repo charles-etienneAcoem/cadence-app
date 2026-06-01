@@ -30,18 +30,38 @@ if 'has_run' not in st.session_state: st.session_state['has_run'] = False
 
 # --- TRANSLATIONS ---
 translations = {
+    "Français": {
+        "auth_title": "🔐 1. Authentification", "api_key": "Clé API", "api_help": "Commence par EZfX...",
+        "target_title": "🎯 2. Cible", "proj_id": "ID du Projet", "dash_id": "ID du Dashboard (Alertes)",
+        "points": "IDs des Points", "points_help": "Ex: 1797, 1798",
+        "settings_title": "⚙️ 3. Paramètres", "metrics": "Sélection des Métriques :",
+        "hourly": "Par Heure (1h)", "short": "Court (15min)", "time_range": "Période :",
+        "limit_db": "Ligne de limite (dB) (0 = désactivé):",
+        "start": "Début", "end": "Fin", "btn_load": "🚀 CHARGER LES DONNÉES", "dashboard_title": "Tableau de Bord",
+        "tab_1h": "⏱️ Données (1h)", "tab_15m": "⚡ Données (15min)", "tab_alerts": "🚨 Alertes",
+        "no_data": "Aucune donnée trouvée pour ces filtres.", "data_table": "Tableau de Données",
+        "rows": "lignes", "export": "📥 Exporter en CSV", "missing_key": "⚠️ Clé API manquante",
+        "invalid_points": "⚠️ Format des IDs de points invalide", "analyzing": "🔍 Analyse de {} points...",
+        "fetching": "Récupération des données...", "no_alerts": "Aucune alerte trouvée pour cette période (Vérifiez le Dashboard ID).",
+        "unknown": "Inconnu", "status_summary": "### 📊 Résumé des statuts", "total_alerts": "Total des alertes",
+        "val_alerts": "✅ Validées", "unval_alerts": "⏳ Non Validées", "open_alerts": "🚨 Ouvertes (à traiter)",
+        "chart_title_1": "#### Nombre d'alertes par Point et Type", "chart_title_2": "#### Sources Identifiées (IA)",
+        "no_ident": "Aucune alerte identifiée.", "no_source_info": "Aucune information de source.",
+        "raw_data": "### 📋 Données Brutes", "api_empty": "L'API n'a renvoyé aucune donnée. Vérifiez les dates ou les IDs."
+    },
     "Español": {
         "auth_title": "🔐 1. Autenticación", "api_key": "Clave API", "api_help": "Empieza con EZfX...",
-        "target_title": "🎯 2. Objetivo", "proj_id": "ID del Proyecto", "dash_id": "ID del Dashboard (Para Alertas)",
+        "target_title": "🎯 2. Objetivo", "proj_id": "ID del Proyecto", "dash_id": "ID del Dashboard (Alertas)",
         "points": "IDs de los Puntos", "points_help": "Ej: 1797, 1798",
         "settings_title": "⚙️ 3. Configuración", "metrics": "Selección de Métricas:",
         "hourly": "Por Hora (1h)", "short": "Corto (15min)", "time_range": "Rango de Tiempo:",
+        "limit_db": "Línea de límite (dB) (0 = desactivado):",
         "start": "Inicio", "end": "Fin", "btn_load": "🚀 CARGAR DATOS", "dashboard_title": "Dashboard de Datos",
-        "tab_1h": "⏱️ Datos por Hora (1h)", "tab_15m": "⚡ Datos Cortos (15min)", "tab_alerts": "🚨 Alertas",
+        "tab_1h": "⏱️ Datos (1h)", "tab_15m": "⚡ Datos (15min)", "tab_alerts": "🚨 Alertas",
         "no_data": "No se encontraron datos para los filtros seleccionados.", "data_table": "Tabla de Datos",
         "rows": "filas", "export": "📥 Exportar CSV", "missing_key": "⚠️ Falta la Clave API",
         "invalid_points": "⚠️ Formato de IDs de Puntos inválido", "analyzing": "🔍 Analizando {} puntos...",
-        "fetching": "Obteniendo datos de la API...", "no_alerts": "No se encontraron alertas para este período y Dashboard ID.",
+        "fetching": "Obteniendo datos de la API...", "no_alerts": "No se encontraron alertas (Compruebe el Dashboard ID).",
         "unknown": "Desconocido", "status_summary": "### 📊 Resumen de estados", "total_alerts": "Total de alertas",
         "val_alerts": "✅ Validadas", "unval_alerts": "⏳ No Validadas", "open_alerts": "🚨 Abiertas (a tratar)",
         "chart_title_1": "#### Número de alertas por Punto y Tipo", "chart_title_2": "#### Fuentes Identificadas (IA)",
@@ -50,16 +70,17 @@ translations = {
     },
     "Català": {
         "auth_title": "🔐 1. Autenticació", "api_key": "Clau API", "api_help": "Comença amb EZfX...",
-        "target_title": "🎯 2. Objectiu", "proj_id": "ID del Projecte", "dash_id": "ID del Dashboard (Per a Alertes)",
+        "target_title": "🎯 2. Objectiu", "proj_id": "ID del Projecte", "dash_id": "ID del Dashboard (Alertes)",
         "points": "IDs dels Punts", "points_help": "Ex: 1797, 1798",
         "settings_title": "⚙️ 3. Configuració", "metrics": "Selecció de Mètriques:",
         "hourly": "Per Hora (1h)", "short": "Curt (15min)", "time_range": "Rang de Temps:",
+        "limit_db": "Línia de límit (dB) (0 = desactivat):",
         "start": "Inici", "end": "Fi", "btn_load": "🚀 CARREGAR DADES", "dashboard_title": "Dashboard de Dades",
-        "tab_1h": "⏱️ Dades per Hora (1h)", "tab_15m": "⚡ Dades Curtes (15min)", "tab_alerts": "🚨 Alertes",
+        "tab_1h": "⏱️ Dades (1h)", "tab_15m": "⚡ Dades (15min)", "tab_alerts": "🚨 Alertes",
         "no_data": "No s'han trobat dades per als filtres seleccionats.", "data_table": "Taula de Dades",
         "rows": "files", "export": "📥 Exportar CSV", "missing_key": "⚠️ Falta la Clau API",
         "invalid_points": "⚠️ Format d'IDs de Punts invàlid", "analyzing": "🔍 Analitzant {} punts...",
-        "fetching": "Obtenint dades de l'API...", "no_alerts": "No s'han trobat alertes per a aquest període i Dashboard ID.",
+        "fetching": "Obtenint dades de l'API...", "no_alerts": "No s'han trobat alertes (Comproveu el Dashboard ID).",
         "unknown": "Desconegut", "status_summary": "### 📊 Resum d'estats", "total_alerts": "Total d'alertes",
         "val_alerts": "✅ Validades", "unval_alerts": "⏳ No Validades", "open_alerts": "🚨 Obertes (a tractar)",
         "chart_title_1": "#### Nombre d'alertes per Punt i Tipus", "chart_title_2": "#### Fonts Identificades (IA)",
@@ -142,7 +163,7 @@ def get_cadence_alerts(api_key, dash_id, start_date, end_date):
 # --- SIDEBAR ---
 with st.sidebar:
     st.markdown(f"""<div class="logo-container"><img src="{ACOEM_LOGO_NEW}" style="width: 100%; max-width: 160px;"></div>""", unsafe_allow_html=True)
-    lang = st.selectbox("Idioma / Llengua", ["Español", "Català"])
+    lang = st.selectbox("Idioma / Langue / Llengua", ["Français", "Español", "Català"])
     t = translations[lang]
     st.divider()
     
@@ -164,6 +185,9 @@ with st.sidebar:
         STD_INDICATORS = [{"label": "LAeq (Avg)", "code": "LAeq", "method": "average"}, {"label": "LAFMax (Max)", "code": "LAFMax", "method": "max"}, {"label": "LAFMin (Min)", "code": "LAFMin", "method": "min"}, {"label": "LCpeak (Max)", "code": "LCpeak", "method": "max"}, {"label": "Lden (Avg)", "code": "Lden", "method": "average"}]
         selected_inds_1h = st.multiselect(t["hourly"], [i["label"] for i in STD_INDICATORS], default=["LAeq (Avg)", "LAFMax (Max)"])
         selected_inds_15m = st.multiselect(t["short"], [i["label"] for i in STD_INDICATORS], default=["LAeq (Avg)"])
+        
+        limit_db_val = st.number_input(t["limit_db"], value=85.0, step=1.0)
+        
         col_d1, col_d2 = st.columns(2)
         d_start = col_d1.date_input(t["start"], date.today() - timedelta(days=1))
         d_end = col_d2.date_input(t["end"], date.today())
@@ -185,14 +209,13 @@ if btn_run:
     st.session_state['has_run'] = True
     
     with st.spinner(t["fetching"]):
-        # Reset data
         st.session_state['df_1h'] = get_cadence_data(api_key, project_id, mp_ids_list, d_start, d_end, 3600, selected_inds_1h, STD_INDICATORS) if selected_inds_1h else None
         st.session_state['df_15m'] = get_cadence_data(api_key, project_id, mp_ids_list, d_start, d_end, 900, selected_inds_15m, STD_INDICATORS) if selected_inds_15m else None
         st.session_state['df_alerts'] = get_cadence_alerts(api_key, dashboard_id, d_start, d_end)
 
 
 # --- RENDERING FUNCTIONS ---
-def render_dashboard(df, title_suffix):
+def render_dashboard(df, title_suffix, limit_val):
     if df is None or df.empty:
         st.warning(t["no_data"])
         return
@@ -204,6 +227,10 @@ def render_dashboard(df, title_suffix):
         for col in df.columns:
             fig.add_trace(go.Scatter(x=df.index, y=df[col], mode='lines', name=col, line=dict(width=2, color=next(colors))))
         
+        # AJOUT DE LA LIGNE LIMITE SI > 0
+        if limit_val > 0:
+            fig.add_hline(y=limit_val, line_dash="dash", line_color="#ff6952", annotation_text=f"{limit_val} dB", annotation_position="top left")
+
         fig.update_layout(
             title=f"{title_suffix}", xaxis_title="Time", yaxis_title="Level (dB)",
             height=500, margin=dict(l=20, r=20, t=40, b=20),
@@ -215,7 +242,6 @@ def render_dashboard(df, title_suffix):
     with col_table:
         st.markdown(f"**{t['data_table']}** ({len(df)} {t['rows']})")
         st.download_button(label=t["export"], data=df.to_csv().encode('utf-8'), file_name=f"Cadence_{title_suffix}_{project_id}.csv", mime="text/csv", key=f"dl_btn_{title_suffix}", type="primary", use_container_width=True)
-        # Convert to string safely to avoid PyArrow crash
         st.dataframe(df.astype(str), height=450, use_container_width=True)
 
 def render_alerts(df):
@@ -271,7 +297,6 @@ def render_alerts(df):
         
     st.divider()
     st.markdown(t["raw_data"])
-    # Convert all columns to string to prevent Streamlit/PyArrow ArrowInvalid errors with JSON objects
     st.dataframe(df_clean.astype(str), use_container_width=True)
 
 
@@ -281,9 +306,11 @@ if st.session_state['has_run']:
         st.error(t["api_empty"])
     else:
         t1, t2, t3 = st.tabs([t["tab_1h"], t["tab_15m"], t["tab_alerts"]])
-        with t1: render_dashboard(st.session_state['df_1h'], t["hourly"])
-        with t2: render_dashboard(st.session_state['df_15m'], t["short"])
+        with t1: render_dashboard(st.session_state['df_1h'], t["hourly"], limit_db_val)
+        with t2: render_dashboard(st.session_state['df_15m'], t["short"], limit_db_val)
         with t3: render_alerts(st.session_state['df_alerts'])
 else:
-    msg = "👈 Abre las secciones en la barra lateral para configurar y cargar datos." if lang == 'Español' else "👈 Obre les seccions a la barra lateral per configurar i carregar dades."
+    if lang == 'Français': msg = "👈 Ouvrez les sections de la barre latérale pour configurer et charger les données."
+    elif lang == 'Español': msg = "👈 Abre las secciones en la barra lateral para configurar y cargar datos."
+    else: msg = "👈 Obre les seccions a la barra lateral per configurar i carregar dades."
     st.info(msg)
