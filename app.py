@@ -392,3 +392,22 @@ def render_chat_agent(api_key, proj_id):
                 st.markdown(response)
         
         st.session_state['messages'].append({"role": "assistant", "content": response})
+        # --- DISPLAY TABS (If we have run at least once) ---
+if st.session_state['has_run']:
+    if st.session_state['df_1h'] is None and st.session_state['df_15m'] is None and st.session_state['df_alerts'] is None:
+        st.error(t["api_empty"])
+    else:
+        # On ajoute t4 pour le chat
+        t1, t2, t3, t4 = st.tabs([t["tab_1h"], t["tab_15m"], t["tab_alerts"], t["tab_ai"]])
+        
+        with t1: render_dashboard(st.session_state['df_1h'], t["hourly"], limit_db_val)
+        with t2: render_dashboard(st.session_state['df_15m'], t["short"], limit_db_val)
+        with t3: render_alerts(st.session_state['df_alerts'])
+        
+        # Appel de l'assistant IA dans le 4ème onglet
+        with t4: render_chat_agent(api_key, project_id)
+else:
+    if lang == 'Français': msg = "👈 Ouvrez les sections de la barre latérale pour configurer et charger les données."
+    elif lang == 'Español': msg = "👈 Abre las secciones en la barra lateral para configurar y cargar datos."
+    else: msg = "👈 Obre les seccions a la barra lateral per configurar i carregar dades."
+    st.info(msg)
