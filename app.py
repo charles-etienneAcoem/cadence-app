@@ -27,7 +27,9 @@ if 'df_1h' not in st.session_state: st.session_state['df_1h'] = None
 if 'df_15m' not in st.session_state: st.session_state['df_15m'] = None
 if 'df_alerts' not in st.session_state: st.session_state['df_alerts'] = None
 if 'has_run' not in st.session_state: st.session_state['has_run'] = False
+if 'messages' not in st.session_state: st.session_state['messages'] = []
 
+# --- TRANSLATIONS ---
 # --- TRANSLATIONS ---
 translations = {
     "Français": {
@@ -47,7 +49,9 @@ translations = {
         "val_alerts": "✅ Validées", "unval_alerts": "⏳ Non Validées", "open_alerts": "🚨 Ouvertes (à traiter)",
         "chart_title_1": "#### Nombre d'alertes par Point et Type", "chart_title_2": "#### Sources Identifiées (IA)",
         "no_ident": "Aucune alerte identifiée.", "no_source_info": "Aucune information de source.",
-        "raw_data": "### 📋 Données Brutes", "api_empty": "L'API n'a renvoyé aucune donnée. Vérifiez les dates ou les IDs."
+        "raw_data": "### 📋 Données Brutes", "api_empty": "L'API n'a renvoyé aucune donnée. Vérifiez les dates ou les IDs.",
+        "tab_ai": "🤖 Assistant IA", "chat_placeholder": "Demandez-moi quelque chose sur vos appareils...",
+        "ai_welcome": "Bonjour ! Je suis l'assistant IA de Cadence. Posez-moi des questions sur le projet ou demandez-moi d'analyser les alertes."
     },
     "Español": {
         "auth_title": "🔐 1. Autenticación", "api_key": "Clave API", "api_help": "Empieza con EZfX...",
@@ -66,7 +70,9 @@ translations = {
         "val_alerts": "✅ Validadas", "unval_alerts": "⏳ No Validadas", "open_alerts": "🚨 Abiertas (a tratar)",
         "chart_title_1": "#### Número de alertas por Punto y Tipo", "chart_title_2": "#### Fuentes Identificadas (IA)",
         "no_ident": "Ninguna alerta identificada.", "no_source_info": "Sin información de fuente.",
-        "raw_data": "### 📋 Datos Brutos", "api_empty": "La API no devolvió datos. Comprueba las fechas o los IDs."
+        "raw_data": "### 📋 Datos Brutos", "api_empty": "La API no devolvió datos. Comprueba las fechas o los IDs.",
+        "tab_ai": "🤖 Asistente IA", "chat_placeholder": "Pregúntame algo sobre tus dispositivos...",
+        "ai_welcome": "¡Hola! Soy tu asistente Cadence. Puedo analizar tus alertas o extraer datos específicos. ¿Qué quieres saber?"
     },
     "Català": {
         "auth_title": "🔐 1. Autenticació", "api_key": "Clau API", "api_help": "Comença amb EZfX...",
@@ -85,10 +91,11 @@ translations = {
         "val_alerts": "✅ Validades", "unval_alerts": "⏳ No Validades", "open_alerts": "🚨 Obertes (a tractar)",
         "chart_title_1": "#### Nombre d'alertes per Punt i Tipus", "chart_title_2": "#### Fonts Identificades (IA)",
         "no_ident": "Cap alerta identificada.", "no_source_info": "Sense informació de font.",
-        "raw_data": "### 📋 Dades Brutes", "api_empty": "L'API no ha retornat dades. Comprova les dates o els IDs."
+        "raw_data": "### 📋 Dades Brutes", "api_empty": "L'API no ha retornat dades. Comprova les dates o els IDs.",
+        "tab_ai": "🤖 Assistent IA", "chat_placeholder": "Pregunta'm alguna cosa sobre els teus dispositius...",
+        "ai_welcome": "Hola! Soc el teu assistent Cadence. Puc analitzar les teves alertes o extreure dades. Què vols saber?"
     }
 }
-
 # --- HELPER FUNCTIONS ---
 @st.cache_data(ttl=3600)
 def get_project_name(api_key, proj_id):
@@ -299,6 +306,35 @@ def render_alerts(df):
     st.markdown(t["raw_data"])
     st.dataframe(df_clean.astype(str), use_container_width=True)
 
+    def render_chat_agent(api_key, proj_id):
+    st.markdown(f"### {t['tab_ai']}")
+    
+    # Message de bienvenue
+    if not st.session_state['messages']:
+        st.session_state['messages'].append({"role": "assistant", "content": t["ai_welcome"]})
+
+    # Affichage de l'historique
+    for message in st.session_state['messages']:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+
+    # Zone de saisie
+    if prompt := st.chat_input(t["chat_placeholder"]):
+        
+        # 1. Affiche le message de l'utilisateur
+        with st.chat_message("user"):
+            st.markdown(prompt)
+        st.session_state['messages'].append({"role": "user", "content": prompt})
+
+        # 2. Affiche la réponse de l'IA (Simulation pour l'instant)
+        with st.chat_message("assistant"):
+            with st.spinner("Recherche dans Cadence..."):
+                # C'est ici que l'on connectera l'IA plus tard !
+                response = f"*(Ceci est l'interface IA. Prochaine étape : connecter l'API OpenAI/Gemini pour interroger le projet ID **{proj_id}** suite à votre question : \"{prompt}\")*"
+                st.markdown(response)
+        
+        st.session_state['messages'].append({"role": "assistant", "content": response})
+
 
 # --- DISPLAY TABS (If we have run at least once) ---
 if st.session_state['has_run']:
@@ -309,6 +345,26 @@ if st.session_state['has_run']:
         with t1: render_dashboard(st.session_state['df_1h'], t["hourly"], limit_db_val)
         with t2: render_dashboard(st.session_state['df_15m'], t["short"], limit_db_val)
         with t3: render_alerts(st.session_state['df_alerts'])
+else:
+    if lang == 'Français': msg = "👈 Ouvrez les sections de la barre latérale pour configurer et charger les données."
+    elif lang == 'Español': msg = "👈 Abre las secciones en la barra lateral para configurar y cargar datos."
+    else: msg = "👈 Obre les seccions a la barra lateral per configurar i carregar dades."
+    st.info(msg)
+
+    # --- DISPLAY TABS (If we have run at least once) ---
+if st.session_state['has_run']:
+    if st.session_state['df_1h'] is None and st.session_state['df_15m'] is None and st.session_state['df_alerts'] is None:
+        st.error(t["api_empty"])
+    else:
+        # On ajoute t4 pour le chat
+        t1, t2, t3, t4 = st.tabs([t["tab_1h"], t["tab_15m"], t["tab_alerts"], t["tab_ai"]])
+        
+        with t1: render_dashboard(st.session_state['df_1h'], t["hourly"], limit_db_val)
+        with t2: render_dashboard(st.session_state['df_15m'], t["short"], limit_db_val)
+        with t3: render_alerts(st.session_state['df_alerts'])
+        
+        # Appel de l'assistant IA dans le 4ème onglet
+        with t4: render_chat_agent(api_key, project_id)
 else:
     if lang == 'Français': msg = "👈 Ouvrez les sections de la barre latérale pour configurer et charger les données."
     elif lang == 'Español': msg = "👈 Abre las secciones en la barra lateral para configurar y cargar datos."
