@@ -30,7 +30,6 @@ if 'has_run' not in st.session_state: st.session_state['has_run'] = False
 if 'messages' not in st.session_state: st.session_state['messages'] = []
 
 # --- TRANSLATIONS ---
-# --- TRANSLATIONS ---
 translations = {
     "Français": {
         "auth_title": "🔐 1. Authentification", "api_key": "Clé API", "api_help": "Commence par EZfX...",
@@ -96,6 +95,7 @@ translations = {
         "ai_welcome": "Hola! Soc el teu assistent Cadence. Puc analitzar les teves alertes o extreure dades. Què vols saber?"
     }
 }
+
 # --- HELPER FUNCTIONS ---
 @st.cache_data(ttl=3600)
 def get_project_name(api_key, proj_id):
@@ -251,6 +251,7 @@ def render_dashboard(df, title_suffix, limit_val):
         st.download_button(label=t["export"], data=df.to_csv().encode('utf-8'), file_name=f"Cadence_{title_suffix}_{project_id}.csv", mime="text/csv", key=f"dl_btn_{title_suffix}", type="primary", use_container_width=True)
         st.dataframe(df.astype(str), height=450, use_container_width=True)
 
+
 def render_alerts(df):
     if df is None or df.empty:
         st.warning(t["no_alerts"])
@@ -306,7 +307,8 @@ def render_alerts(df):
     st.markdown(t["raw_data"])
     st.dataframe(df_clean.astype(str), use_container_width=True)
 
-    def render_chat_agent(api_key, proj_id):
+
+def render_chat_agent(api_key, proj_id):
     st.markdown(f"### {t['tab_ai']}")
     
     # Message de bienvenue
@@ -337,21 +339,6 @@ def render_alerts(df):
 
 
 # --- DISPLAY TABS (If we have run at least once) ---
-if st.session_state['has_run']:
-    if st.session_state['df_1h'] is None and st.session_state['df_15m'] is None and st.session_state['df_alerts'] is None:
-        st.error(t["api_empty"])
-    else:
-        t1, t2, t3 = st.tabs([t["tab_1h"], t["tab_15m"], t["tab_alerts"]])
-        with t1: render_dashboard(st.session_state['df_1h'], t["hourly"], limit_db_val)
-        with t2: render_dashboard(st.session_state['df_15m'], t["short"], limit_db_val)
-        with t3: render_alerts(st.session_state['df_alerts'])
-else:
-    if lang == 'Français': msg = "👈 Ouvrez les sections de la barre latérale pour configurer et charger les données."
-    elif lang == 'Español': msg = "👈 Abre las secciones en la barra lateral para configurar y cargar datos."
-    else: msg = "👈 Obre les seccions a la barra lateral per configurar i carregar dades."
-    st.info(msg)
-
-    # --- DISPLAY TABS (If we have run at least once) ---
 if st.session_state['has_run']:
     if st.session_state['df_1h'] is None and st.session_state['df_15m'] is None and st.session_state['df_alerts'] is None:
         st.error(t["api_empty"])
