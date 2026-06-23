@@ -308,6 +308,62 @@ def render_alerts(df):
     st.dataframe(df_clean.astype(str), use_container_width=True)
 
 
+def process_local_query(prompt, lang):
+    """Analyse la question et cherche dans les données chargées en session state."""
+    prompt_low = prompt.lower()
+    response = ""
+    
+    df_1h = st.session_state.get('df_1h')
+    df_15m = st.session_state.get('df_15m')
+    df_alerts = st.session_state.get('df_alerts')
+    
+    # 1. Recherche d'alertes ou d'événements
+    if any(w in prompt_low for w in ["alerte", "alert", "évènement", "événement", "event"]):
+        if df_alerts is not None and not df_alerts.empty:
+            response += f"🚨 **Analyse des alertes :** J'ai trouvé **{len(df_alerts)}** événement(s) sur cette période.\n\n"
+        else:
+            response += "✅ **Analyse des alertes :** Aucune alerte n'a été chargée ou trouvée pour le moment.\n\n"
+            
+    # 2. Recherche de Max, Min, Moyenne (Utilise df_15m en priorité car plus précis, sinon df_1h)
+    df_data = df_15m if df_15m is not None and not df_15m.empty else df_1h
+    
+    if df_data is not None and not df_data.empty:
+        # On s'assure de ne traiter que les colonnes avec des chiffres (pour éviter les crashs)
+        try:
+            df_num = df_data.apply(pd.to_numeric, errors='coerce').dropna(axis=1, how='all')
+            
+            if not df_num.empty:
+                if "max" in prompt_low:
+                    response += "📈 **Valeurs Maximales enregistrées :**\n"
+                    for col in df_num.columns:
+                        response += f"- {col} : **{df_num[col].max():.1f} dB**\n"
+                    response += "\n"
+                    
+                if "min" in prompt_low:
+                    response += "📉 **Valeurs Minimales enregistrées :**\n"
+                    for col in df_num.columns:
+                        response += f"- {col} : **{df_num[col].min():.1f} dB**\n"
+                    response += "\n"
+                    
+                if any(w in prompt_low for w in ["moyen", "avg", "average", "mitjana"]):
+                    response += "📏 **Moyennes sur la période :**\n"
+                    for col in df_num.columns:
+                        response += f"- {col} : **{df_num[col].mean():.1f} dB**\n"
+                    response += "\n"
+        except Exception as e:
+            response += "⚠️ Une erreur est survenue lors de l'analyse mathématique des colonnes.\n"
+    else:
+        # Si on demande des calculs mais que rien n'est chargé
+        if any(w in prompt_low for w in ["max", "min", "moyen", "avg"]):
+            response += "⚠️ Vous devez d'abord charger les données (cliquez sur '🚀 CHARGER LES DONNÉES') pour que je puisse calculer les niveaux.\n\n"
+            
+    # Fallback : Si l'utilisateur tape une phrase sans mots-clés connus
+    if not response:
+        response = "🤖 *Je suis un moteur de recherche interne (sans IA externe).* Je parcours les données que vous avez chargées. Essayez de me demander :\n- 'Combien d'**alertes** y a-t-il ?'\n- 'Quel est le **max** ?'\n- 'Donne moi la **moyenne**'\n- 'Quel est le **min** ?'"
+        
+    return response
+
+
 def render_chat_agent(api_key, proj_id):
     st.markdown(f"### {t['tab_ai']}")
     
@@ -328,32 +384,11 @@ def render_chat_agent(api_key, proj_id):
             st.markdown(prompt)
         st.session_state['messages'].append({"role": "user", "content": prompt})
 
-        # 2. Affiche la réponse de l'IA (Simulation pour l'instant)
+        # 2. L'assistant local analyse la demande
         with st.chat_message("assistant"):
-            with st.spinner("Recherche dans Cadence..."):
-                # C'est ici que l'on connectera l'IA plus tard !
-                response = f"*(Ceci est l'interface IA. Prochaine étape : connecter l'API OpenAI/Gemini pour interroger le projet ID **{proj_id}** suite à votre question : \"{prompt}\")*"
+            with st.spinner("Analyse locale des données en cours..."):
+                # On appelle notre nouvelle fonction locale
+                response = process_local_query(prompt, lang)
                 st.markdown(response)
         
         st.session_state['messages'].append({"role": "assistant", "content": response})
-
-
-# --- DISPLAY TABS (If we have run at least once) ---
-if st.session_state['has_run']:
-    if st.session_state['df_1h'] is None and st.session_state['df_15m'] is None and st.session_state['df_alerts'] is None:
-        st.error(t["api_empty"])
-    else:
-        # On ajoute t4 pour le chat
-        t1, t2, t3, t4 = st.tabs([t["tab_1h"], t["tab_15m"], t["tab_alerts"], t["tab_ai"]])
-        
-        with t1: render_dashboard(st.session_state['df_1h'], t["hourly"], limit_db_val)
-        with t2: render_dashboard(st.session_state['df_15m'], t["short"], limit_db_val)
-        with t3: render_alerts(st.session_state['df_alerts'])
-        
-        # Appel de l'assistant IA dans le 4ème onglet
-        with t4: render_chat_agent(api_key, project_id)
-else:
-    if lang == 'Français': msg = "👈 Ouvrez les sections de la barre latérale pour configurer et charger les données."
-    elif lang == 'Español': msg = "👈 Abre las secciones en la barra lateral para configurar y cargar datos."
-    else: msg = "👈 Obre les seccions a la barra lateral per configurar i carregar dades."
-    st.info(msg)
