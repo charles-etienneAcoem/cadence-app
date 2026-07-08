@@ -198,7 +198,8 @@ def create_pdf_report(df, title):
     pdf.set_font("Arial", 'I', 10)
     pdf.cell(200, 10, txt=f"Genere le {datetime.now().strftime('%Y-%m-%d %H:%M')}", ln=True)
     
-return bytes(pdf.output())
+    # Correction de l'indentation ici !
+    return bytes(pdf.output())
 
 
 # --- SIDEBAR ---
