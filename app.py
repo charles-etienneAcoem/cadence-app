@@ -198,8 +198,7 @@ def create_pdf_report(df, title):
     pdf.set_font("Arial", 'I', 10)
     pdf.cell(200, 10, txt=f"Genere le {datetime.now().strftime('%Y-%m-%d %H:%M')}", ln=True)
     
-    # Retourne les bytes latin-1 comme requis par la lib fpdf de base
-    return pdf.output(dest='S').encode('latin-1')
+return bytes(pdf.output())
 
 
 # --- SIDEBAR ---
