@@ -241,7 +241,8 @@ with st.sidebar:
 
 
 # --- MAIN UI Logic ---
-st.title(f"{display_name} - {t['dashboard_title']}")
+# Utilisation de st.header au lieu de st.title pour un texte moins massif
+st.header(f"{display_name} - {t['dashboard_title']}")
 
 if btn_run:
     if not api_key: st.error(t["missing_key"]); st.stop()
@@ -264,58 +265,59 @@ def render_dashboard(df, title_suffix, limit_val):
         st.warning(t["no_data"])
         return
 
-    col_graph, col_table = st.columns([6, 4])
-    with col_graph:
-        fig = go.Figure()
-        colors = itertools.cycle(ACOEM_COLORS)
-        for col in df.columns:
-            # Lissage de la courbe (shape='spline')
-            fig.add_trace(go.Scatter(
-                x=df.index, y=df[col], 
-                mode='lines', 
-                name=col, 
-                line=dict(width=2, color=next(colors), shape='spline', smoothing=1.2),
-                hovertemplate='%{y:.1f} dB'
-            ))
-        
-        # AJOUT DE LA LIGNE LIMITE SI > 0
-        if limit_val > 0:
-            fig.add_hline(y=limit_val, line_dash="dash", line_color="#ff6952", annotation_text=f"{limit_val} dB", annotation_position="top left")
+    # 1. COURBE EN PLEINE LARGEUR
+    fig = go.Figure()
+    colors = itertools.cycle(ACOEM_COLORS)
+    for col in df.columns:
+        # Lissage de la courbe (shape='spline')
+        fig.add_trace(go.Scatter(
+            x=df.index, y=df[col], 
+            mode='lines', 
+            name=col, 
+            line=dict(width=2, color=next(colors), shape='spline', smoothing=1.2),
+            hovertemplate='%{y:.1f} dB'
+        ))
+    
+    # AJOUT DE LA LIGNE LIMITE SI > 0
+    if limit_val > 0:
+        fig.add_hline(y=limit_val, line_dash="dash", line_color="#ff6952", annotation_text=f"{limit_val} dB", annotation_position="top left")
 
-        fig.update_layout(
-            title=f"{title_suffix}", xaxis_title="Time", yaxis_title="Level (dB)",
-            height=500, margin=dict(l=20, r=20, t=40, b=20),
-            template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-            legend=dict(orientation="h", y=1.1), hovermode="x unified"
+    fig.update_layout(
+        title=f"{title_suffix}", xaxis_title="Time", yaxis_title="Level (dB)",
+        height=500, margin=dict(l=20, r=20, t=40, b=20),
+        template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+        legend=dict(orientation="h", y=1.1), hovermode="x unified"
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+    st.divider() # Ligne de séparation esthétique
+
+    # 2. TABLEAU ET BOUTONS EN DESSOUS
+    st.markdown(f"**{t['data_table']}** ({len(df)} {t['rows']})")
+    
+    # Boutons d'exports alignés horizontalement
+    btn_col1, btn_col2 = st.columns(2)
+    with btn_col1:
+        st.download_button(
+            label=t["export"], 
+            data=df.to_csv().encode('utf-8'), 
+            file_name=f"Cadence_{title_suffix}_{project_id}.csv", 
+            mime="text/csv", 
+            type="primary", 
+            use_container_width=True
         )
-        st.plotly_chart(fig, use_container_width=True)
-
-    with col_table:
-        st.markdown(f"**{t['data_table']}** ({len(df)} {t['rows']})")
+    with btn_col2:
+        pdf_bytes = create_pdf_report(df, f"{title_suffix} - Projet {project_id}")
+        st.download_button(
+            label=t["export_pdf"], 
+            data=pdf_bytes, 
+            file_name=f"Cadence_Report_{title_suffix}_{project_id}.pdf", 
+            mime="application/pdf", 
+            type="secondary", 
+            use_container_width=True
+        )
         
-        # Boutons d'exports sur la même ligne
-        btn_col1, btn_col2 = st.columns(2)
-        with btn_col1:
-            st.download_button(
-                label=t["export"], 
-                data=df.to_csv().encode('utf-8'), 
-                file_name=f"Cadence_{title_suffix}_{project_id}.csv", 
-                mime="text/csv", 
-                type="primary", 
-                use_container_width=True
-            )
-        with btn_col2:
-            pdf_bytes = create_pdf_report(df, f"{title_suffix} - Projet {project_id}")
-            st.download_button(
-                label=t["export_pdf"], 
-                data=pdf_bytes, 
-                file_name=f"Cadence_Report_{title_suffix}_{project_id}.pdf", 
-                mime="application/pdf", 
-                type="secondary", 
-                use_container_width=True
-            )
-            
-        st.dataframe(df.astype(str), height=380, use_container_width=True)
+    st.dataframe(df.astype(str), height=380, use_container_width=True)
 
 
 def render_alerts(df):
