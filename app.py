@@ -5,18 +5,19 @@ import plotly.graph_objects as go
 from datetime import datetime, date, time, timedelta
 import itertools
 import re
+from fpdf import FPDF  # Import pour la génération de PDF
 
 # --- ASSETS ---
-ACOEM_LOGO_NEW = "https://cdn.bfldr.com/Q3Z2TZY7/at/b4z3s28jpswp92h6z35h9f3/ACOEM-LOGO-WithoutBaseline-RGB-Bicolor.jpg?auto=webp&format=jpg"
+# Utilisation de ton image locale pour le logo et l'icône
+NOISE_CON_LOGO = "image_4655bf.jpg"
 ACOEM_COLORS = ['#ff6952', '#2c5078', '#96c8de', '#FFB000', '#50C878', '#808080', '#000000']
 
 # --- 1. PAGE CONFIGURATION ---
-st.set_page_config(page_title="Cadence Data", page_icon=ACOEM_LOGO_NEW, layout="wide")
+st.set_page_config(page_title="Cadence Data", page_icon=NOISE_CON_LOGO, layout="wide")
 
 st.markdown("""
     <style>
         .block-container { padding-top: 2rem; padding-bottom: 1rem; }
-        .logo-container { background-color: white; padding: 12px; border-radius: 6px; display: flex; justify-content: center; align-items: center; margin-bottom: 20px; }
         .streamlit-expanderHeader { font-size: 1rem; font-weight: bold; color: #ff6952; }
         .project-detected { color: #50C878; font-size: 0.85rem; font-weight: bold; margin-top: -10px; margin-bottom: 10px; }
     </style>
@@ -41,14 +42,15 @@ translations = {
         "start": "Début", "end": "Fin", "btn_load": "🚀 CHARGER LES DONNÉES", "dashboard_title": "Tableau de Bord",
         "tab_1h": "⏱️ Données (1h)", "tab_15m": "⚡ Données (15min)", "tab_alerts": "🚨 Alertes",
         "no_data": "Aucune donnée trouvée pour ces filtres.", "data_table": "Tableau de Données",
-        "rows": "lignes", "export": "📥 Exporter en CSV", "missing_key": "⚠️ Clé API manquante",
+        "rows": "lignes", "export": "📥 Exporter en CSV", "export_pdf": "📄 Exporter le Rapport (PDF)", 
+        "missing_key": "⚠️ Clé API manquante",
         "invalid_points": "⚠️ Format des IDs de points invalide", "analyzing": "🔍 Analyse de {} points...",
-        "fetching": "Récupération des données...", "no_alerts": "Aucune alerte trouvée pour cette période (Vérifiez le Dashboard ID).",
+        "fetching": "Récupération des données...", "no_alerts": "Aucune alerte trouvée pour cette période.",
         "unknown": "Inconnu", "status_summary": "### 📊 Résumé des statuts", "total_alerts": "Total des alertes",
         "val_alerts": "✅ Validées", "unval_alerts": "⏳ Non Validées", "open_alerts": "🚨 Ouvertes (à traiter)",
         "chart_title_1": "#### Nombre d'alertes par Point et Type", "chart_title_2": "#### Sources Identifiées (IA)",
         "no_ident": "Aucune alerte identifiée.", "no_source_info": "Aucune information de source.",
-        "raw_data": "### 📋 Données Brutes", "api_empty": "L'API n'a renvoyé aucune donnée. Vérifiez les dates ou les IDs.",
+        "raw_data": "### 📋 Données Brutes", "api_empty": "L'API n'a renvoyé aucune donnée.",
         "tab_ai": "🤖 Assistant IA", "chat_placeholder": "Demandez-moi quelque chose sur vos appareils...",
         "ai_welcome": "Bonjour ! Je suis l'assistant IA de Cadence. Posez-moi des questions sur le projet ou demandez-moi d'analyser les alertes."
     },
@@ -62,16 +64,17 @@ translations = {
         "start": "Inicio", "end": "Fin", "btn_load": "🚀 CARGAR DATOS", "dashboard_title": "Dashboard de Datos",
         "tab_1h": "⏱️ Datos (1h)", "tab_15m": "⚡ Datos (15min)", "tab_alerts": "🚨 Alertas",
         "no_data": "No se encontraron datos para los filtros seleccionados.", "data_table": "Tabla de Datos",
-        "rows": "filas", "export": "📥 Exportar CSV", "missing_key": "⚠️ Falta la Clave API",
+        "rows": "filas", "export": "📥 Exportar CSV", "export_pdf": "📄 Exportar Informe (PDF)", 
+        "missing_key": "⚠️ Falta la Clave API",
         "invalid_points": "⚠️ Formato de IDs de Puntos inválido", "analyzing": "🔍 Analizando {} puntos...",
-        "fetching": "Obteniendo datos de la API...", "no_alerts": "No se encontraron alertas (Compruebe el Dashboard ID).",
+        "fetching": "Obteniendo datos de la API...", "no_alerts": "No se encontraron alertas.",
         "unknown": "Desconocido", "status_summary": "### 📊 Resumen de estados", "total_alerts": "Total de alertas",
         "val_alerts": "✅ Validadas", "unval_alerts": "⏳ No Validadas", "open_alerts": "🚨 Abiertas (a tratar)",
         "chart_title_1": "#### Número de alertas por Punto y Tipo", "chart_title_2": "#### Fuentes Identificadas (IA)",
         "no_ident": "Ninguna alerta identificada.", "no_source_info": "Sin información de fuente.",
-        "raw_data": "### 📋 Datos Brutos", "api_empty": "La API no devolvió datos. Comprueba las fechas o los IDs.",
+        "raw_data": "### 📋 Datos Brutos", "api_empty": "La API no devolvió datos.",
         "tab_ai": "🤖 Asistente IA", "chat_placeholder": "Pregúntame algo sobre tus dispositivos...",
-        "ai_welcome": "¡Hola! Soy tu asistente Cadence. Puedo analizar tus alertas o extraer datos específicos. ¿Qué quieres saber?"
+        "ai_welcome": "¡Hola! Soy tu asistente Cadence. Puedo analizar tus alertas o extraer datos."
     },
     "Català": {
         "auth_title": "🔐 1. Autenticació", "api_key": "Clau API", "api_help": "Comença amb EZfX...",
@@ -82,17 +85,18 @@ translations = {
         "limit_db": "Línia de límit (dB) (0 = desactivat):",
         "start": "Inici", "end": "Fi", "btn_load": "🚀 CARREGAR DADES", "dashboard_title": "Dashboard de Dades",
         "tab_1h": "⏱️ Dades (1h)", "tab_15m": "⚡ Dades (15min)", "tab_alerts": "🚨 Alertes",
-        "no_data": "No s'han trobat dades per als filtres seleccionats.", "data_table": "Taula de Dades",
-        "rows": "files", "export": "📥 Exportar CSV", "missing_key": "⚠️ Falta la Clau API",
-        "invalid_points": "⚠️ Format d'IDs de Punts invàlid", "analyzing": "🔍 Analitzant {} punts...",
-        "fetching": "Obtenint dades de l'API...", "no_alerts": "No s'han trobat alertes (Comproveu el Dashboard ID).",
+        "no_data": "No s'han trobat dades.", "data_table": "Taula de Dades",
+        "rows": "files", "export": "📥 Exportar CSV", "export_pdf": "📄 Exportar Informe (PDF)", 
+        "missing_key": "⚠️ Falta la Clau API",
+        "invalid_points": "⚠️ Format d'IDs invàlid", "analyzing": "🔍 Analitzant {} punts...",
+        "fetching": "Obtenint dades de l'API...", "no_alerts": "No s'han trobat alertes.",
         "unknown": "Desconegut", "status_summary": "### 📊 Resum d'estats", "total_alerts": "Total d'alertes",
         "val_alerts": "✅ Validades", "unval_alerts": "⏳ No Validades", "open_alerts": "🚨 Obertes (a tractar)",
         "chart_title_1": "#### Nombre d'alertes per Punt i Tipus", "chart_title_2": "#### Fonts Identificades (IA)",
         "no_ident": "Cap alerta identificada.", "no_source_info": "Sense informació de font.",
-        "raw_data": "### 📋 Dades Brutes", "api_empty": "L'API no ha retornat dades. Comprova les dates o els IDs.",
+        "raw_data": "### 📋 Dades Brutes", "api_empty": "L'API no ha retornat dades.",
         "tab_ai": "🤖 Assistent IA", "chat_placeholder": "Pregunta'm alguna cosa sobre els teus dispositius...",
-        "ai_welcome": "Hola! Soc el teu assistent Cadence. Puc analitzar les teves alertes o extreure dades. Què vols saber?"
+        "ai_welcome": "Hola! Soc el teu assistent Cadence. Puc analitzar les teves alertes o extreure dades."
     }
 }
 
@@ -134,9 +138,12 @@ def get_cadence_data(api_key, proj_id, mp_ids, start_date, end_date, agg_time, s
                 raw_vals = item.get('data', {}).get('values')
                 if raw_vals:
                     vals = raw_vals[0] if (isinstance(raw_vals, list) and len(raw_vals)>0 and isinstance(raw_vals[0], list)) else raw_vals
-                    try: df[col_name] = pd.Series(vals, index=time_index)
+                    try: 
+                        # Force l'arrondi à 1 décimale
+                        df[col_name] = pd.Series(vals, index=time_index).round(1)
                     except: 
-                        if len(vals) == len(df): df[col_name] = vals
+                        if len(vals) == len(df): 
+                            df[col_name] = [round(v, 1) if isinstance(v, (int, float)) else v for v in vals]
             
             df = df.loc[(df.index >= dt_start) & (df.index < dt_end)].copy()
             return df if not df.empty else None
@@ -166,10 +173,40 @@ def get_cadence_alerts(api_key, dash_id, start_date, end_date):
             
     return pd.json_normalize(all_alerts) if all_alerts else None
 
+def create_pdf_report(df, title):
+    """Génère un PDF simple avec les statistiques des indicateurs"""
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", 'B', 16)
+    pdf.cell(200, 10, txt=f"Rapport de donnees : {title}", ln=True, align='C')
+    pdf.ln(10)
+    
+    pdf.set_font("Arial", 'B', 12)
+    pdf.cell(200, 10, txt="Resume des indicateurs (en dB) :", ln=True)
+    pdf.set_font("Arial", '', 11)
+    
+    # Extraire uniquement les colonnes numériques
+    df_num = df.select_dtypes(include=['float', 'int'])
+    for col in df_num.columns:
+        val_max = df_num[col].max()
+        val_min = df_num[col].min()
+        val_moy = df_num[col].mean()
+        line = f"- {col} : Max = {val_max:.1f} | Min = {val_min:.1f} | Moyenne = {val_moy:.1f}"
+        pdf.cell(200, 8, txt=line, ln=True)
+        
+    pdf.ln(10)
+    pdf.set_font("Arial", 'I', 10)
+    pdf.cell(200, 10, txt=f"Genere le {datetime.now().strftime('%Y-%m-%d %H:%M')}", ln=True)
+    
+    # Retourne les bytes latin-1 comme requis par la lib fpdf de base
+    return pdf.output(dest='S').encode('latin-1')
+
 
 # --- SIDEBAR ---
 with st.sidebar:
-    st.markdown(f"""<div class="logo-container"><img src="{ACOEM_LOGO_NEW}" style="width: 100%; max-width: 160px;"></div>""", unsafe_allow_html=True)
+    # Affichage du logo local
+    st.image(NOISE_CON_LOGO, use_container_width=True)
+    
     lang = st.selectbox("Idioma / Langue / Llengua", ["Français", "Español", "Català"])
     t = translations[lang]
     st.divider()
@@ -227,12 +264,19 @@ def render_dashboard(df, title_suffix, limit_val):
         st.warning(t["no_data"])
         return
 
-    col_graph, col_table = st.columns([1, 1])
+    col_graph, col_table = st.columns([6, 4])
     with col_graph:
         fig = go.Figure()
         colors = itertools.cycle(ACOEM_COLORS)
         for col in df.columns:
-            fig.add_trace(go.Scatter(x=df.index, y=df[col], mode='lines', name=col, line=dict(width=2, color=next(colors))))
+            # Lissage de la courbe (shape='spline')
+            fig.add_trace(go.Scatter(
+                x=df.index, y=df[col], 
+                mode='lines', 
+                name=col, 
+                line=dict(width=2, color=next(colors), shape='spline', smoothing=1.2),
+                hovertemplate='%{y:.1f} dB'
+            ))
         
         # AJOUT DE LA LIGNE LIMITE SI > 0
         if limit_val > 0:
@@ -248,8 +292,30 @@ def render_dashboard(df, title_suffix, limit_val):
 
     with col_table:
         st.markdown(f"**{t['data_table']}** ({len(df)} {t['rows']})")
-        st.download_button(label=t["export"], data=df.to_csv().encode('utf-8'), file_name=f"Cadence_{title_suffix}_{project_id}.csv", mime="text/csv", key=f"dl_btn_{title_suffix}", type="primary", use_container_width=True)
-        st.dataframe(df.astype(str), height=450, use_container_width=True)
+        
+        # Boutons d'exports sur la même ligne
+        btn_col1, btn_col2 = st.columns(2)
+        with btn_col1:
+            st.download_button(
+                label=t["export"], 
+                data=df.to_csv().encode('utf-8'), 
+                file_name=f"Cadence_{title_suffix}_{project_id}.csv", 
+                mime="text/csv", 
+                type="primary", 
+                use_container_width=True
+            )
+        with btn_col2:
+            pdf_bytes = create_pdf_report(df, f"{title_suffix} - Projet {project_id}")
+            st.download_button(
+                label=t["export_pdf"], 
+                data=pdf_bytes, 
+                file_name=f"Cadence_Report_{title_suffix}_{project_id}.pdf", 
+                mime="application/pdf", 
+                type="secondary", 
+                use_container_width=True
+            )
+            
+        st.dataframe(df.astype(str), height=380, use_container_width=True)
 
 
 def render_alerts(df):
@@ -309,7 +375,6 @@ def render_alerts(df):
 
 
 def process_local_query(prompt, lang):
-    """Analyse la question et cherche dans les données chargées en session state."""
     prompt_low = prompt.lower()
     response = ""
     
@@ -317,18 +382,15 @@ def process_local_query(prompt, lang):
     df_15m = st.session_state.get('df_15m')
     df_alerts = st.session_state.get('df_alerts')
     
-    # 1. Recherche d'alertes ou d'événements
     if any(w in prompt_low for w in ["alerte", "alert", "évènement", "événement", "event"]):
         if df_alerts is not None and not df_alerts.empty:
             response += f"🚨 **Analyse des alertes :** J'ai trouvé **{len(df_alerts)}** événement(s) sur cette période.\n\n"
         else:
             response += "✅ **Analyse des alertes :** Aucune alerte n'a été chargée ou trouvée pour le moment.\n\n"
             
-    # 2. Recherche de Max, Min, Moyenne (Utilise df_15m en priorité car plus précis, sinon df_1h)
     df_data = df_15m if df_15m is not None and not df_15m.empty else df_1h
     
     if df_data is not None and not df_data.empty:
-        # On s'assure de ne traiter que les colonnes avec des chiffres (pour éviter les crashs)
         try:
             df_num = df_data.apply(pd.to_numeric, errors='coerce').dropna(axis=1, how='all')
             
@@ -353,13 +415,11 @@ def process_local_query(prompt, lang):
         except Exception as e:
             response += "⚠️ Une erreur est survenue lors de l'analyse mathématique des colonnes.\n"
     else:
-        # Si on demande des calculs mais que rien n'est chargé
         if any(w in prompt_low for w in ["max", "min", "moyen", "avg"]):
-            response += "⚠️ Vous devez d'abord charger les données (cliquez sur '🚀 CHARGER LES DONNÉES') pour que je puisse calculer les niveaux.\n\n"
+            response += "⚠️ Vous devez d'abord charger les données pour que je puisse calculer les niveaux.\n\n"
             
-    # Fallback : Si l'utilisateur tape une phrase sans mots-clés connus
     if not response:
-        response = "🤖 *Je suis un moteur de recherche interne (sans IA externe).* Je parcours les données que vous avez chargées. Essayez de me demander :\n- 'Combien d'**alertes** y a-t-il ?'\n- 'Quel est le **max** ?'\n- 'Donne moi la **moyenne**'\n- 'Quel est le **min** ?'"
+        response = "🤖 *Je suis un moteur de recherche interne.* Je parcours les données que vous avez chargées. Essayez de me demander :\n- 'Combien d'**alertes** y a-t-il ?'\n- 'Quel est le **max** ?'\n- 'Donne moi la **moyenne**'\n- 'Quel est le **min** ?'"
         
     return response
 
@@ -367,44 +427,35 @@ def process_local_query(prompt, lang):
 def render_chat_agent(api_key, proj_id):
     st.markdown(f"### {t['tab_ai']}")
     
-    # Message de bienvenue
     if not st.session_state['messages']:
         st.session_state['messages'].append({"role": "assistant", "content": t["ai_welcome"]})
 
-    # Affichage de l'historique
     for message in st.session_state['messages']:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    # Zone de saisie
     if prompt := st.chat_input(t["chat_placeholder"]):
-        
-        # 1. Affiche le message de l'utilisateur
         with st.chat_message("user"):
             st.markdown(prompt)
         st.session_state['messages'].append({"role": "user", "content": prompt})
 
-        # 2. L'assistant local analyse la demande
         with st.chat_message("assistant"):
             with st.spinner("Analyse locale des données en cours..."):
-                # On appelle notre nouvelle fonction locale
                 response = process_local_query(prompt, lang)
                 st.markdown(response)
         
         st.session_state['messages'].append({"role": "assistant", "content": response})
-        # --- DISPLAY TABS (If we have run at least once) ---
+
+# --- DISPLAY TABS ---
 if st.session_state['has_run']:
     if st.session_state['df_1h'] is None and st.session_state['df_15m'] is None and st.session_state['df_alerts'] is None:
         st.error(t["api_empty"])
     else:
-        # On ajoute t4 pour le chat
         t1, t2, t3, t4 = st.tabs([t["tab_1h"], t["tab_15m"], t["tab_alerts"], t["tab_ai"]])
         
         with t1: render_dashboard(st.session_state['df_1h'], t["hourly"], limit_db_val)
         with t2: render_dashboard(st.session_state['df_15m'], t["short"], limit_db_val)
         with t3: render_alerts(st.session_state['df_alerts'])
-        
-        # Appel de l'assistant IA dans le 4ème onglet
         with t4: render_chat_agent(api_key, project_id)
 else:
     if lang == 'Français': msg = "👈 Ouvrez les sections de la barre latérale pour configurer et charger les données."
