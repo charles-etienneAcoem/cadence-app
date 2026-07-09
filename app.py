@@ -54,6 +54,28 @@ translations = {
         "tab_ai": "🤖 Assistant IA", "chat_placeholder": "Demandez-moi quelque chose sur vos appareils...",
         "ai_welcome": "Bonjour ! Je suis l'assistant IA de Cadence. Posez-moi des questions sur le projet ou demandez-moi d'analyser les alertes."
     },
+    "English (US)": {
+        "auth_title": "🔐 1. Authentication", "api_key": "API Key", "api_help": "Starts with EZfX...",
+        "target_title": "🎯 2. Target", "proj_id": "Project ID", "dash_id": "Dashboard ID (Alerts)",
+        "points": "Point IDs", "points_help": "Ex: 1797, 1798",
+        "settings_title": "⚙️ 3. Settings", "metrics": "Metrics Selection:",
+        "hourly": "Hourly (1h)", "short": "Short (15min)", "time_range": "Time Range:",
+        "limit_db": "Limit line (dB) (0 = disabled):",
+        "start": "Start", "end": "End", "btn_load": "🚀 LOAD DATA", "dashboard_title": "Data Dashboard",
+        "tab_1h": "⏱️ Data (1h)", "tab_15m": "⚡ Data (15min)", "tab_alerts": "🚨 Alerts",
+        "no_data": "No data found for these filters.", "data_table": "Data Table",
+        "rows": "rows", "export": "📥 Export to CSV", "export_pdf": "📄 Export Report (PDF)", 
+        "missing_key": "⚠️ Missing API Key",
+        "invalid_points": "⚠️ Invalid Point IDs format", "analyzing": "🔍 Analyzing {} points...",
+        "fetching": "Fetching data...", "no_alerts": "No alerts found for this period.",
+        "unknown": "Unknown", "status_summary": "### 📊 Status Summary", "total_alerts": "Total alerts",
+        "val_alerts": "✅ Validated", "unval_alerts": "⏳ Unvalidated", "open_alerts": "🚨 Open (to be treated)",
+        "chart_title_1": "#### Number of alerts by Point and Type", "chart_title_2": "#### Identified Sources (AI)",
+        "no_ident": "No alerts identified.", "no_source_info": "No source information.",
+        "raw_data": "### 📋 Raw Data", "api_empty": "The API returned no data.",
+        "tab_ai": "🤖 AI Assistant", "chat_placeholder": "Ask me anything about your devices...",
+        "ai_welcome": "Hello! I am your Cadence AI Assistant. Ask me about the project or to analyze the alerts."
+    },
     "Español": {
         "auth_title": "🔐 1. Autenticación", "api_key": "Clave API", "api_help": "Empieza con EZfX...",
         "target_title": "🎯 2. Objetivo", "proj_id": "ID del Proyecto", "dash_id": "ID del Dashboard (Alertas)",
@@ -198,7 +220,7 @@ def create_pdf_report(df, title):
     pdf.set_font("Arial", 'I', 10)
     pdf.cell(200, 10, txt=f"Genere le {datetime.now().strftime('%Y-%m-%d %H:%M')}", ln=True)
     
-    # Correction de l'indentation ici !
+    # Correction de l'indentation
     return bytes(pdf.output())
 
 
@@ -207,7 +229,8 @@ with st.sidebar:
     # Affichage du logo local
     st.image(NOISE_CON_LOGO, use_container_width=True)
     
-    lang = st.selectbox("Idioma / Langue / Llengua", ["Français", "Español", "Català"])
+    # Ajout de l'Anglais Américain dans la liste
+    lang = st.selectbox("Language / Langue / Idioma", ["Français", "English (US)", "Español", "Català"])
     t = translations[lang]
     st.divider()
     
@@ -241,7 +264,6 @@ with st.sidebar:
 
 
 # --- MAIN UI Logic ---
-# Utilisation de st.header au lieu de st.title pour un texte moins massif
 st.header(f"{display_name} - {t['dashboard_title']}")
 
 if btn_run:
@@ -260,7 +282,8 @@ if btn_run:
 
 
 # --- RENDERING FUNCTIONS ---
-def render_dashboard(df, title_suffix, limit_val):
+# Ajout de df_alerts dans les arguments pour pouvoir les superposer
+def render_dashboard(df, df_alerts, title_suffix, limit_val):
     if df is None or df.empty:
         st.warning(t["no_data"])
         return
@@ -268,6 +291,11 @@ def render_dashboard(df, title_suffix, limit_val):
     # 1. COURBE EN PLEINE LARGEUR
     fig = go.Figure()
     colors = itertools.cycle(ACOEM_COLORS)
+    
+    # Maximum Y pour positionner l'icône de l'alerte au-dessus de la courbe
+    y_max = df.select_dtypes(include='number').max().max()
+    if pd.isna(y_max): y_max = limit_val if limit_val > 0 else 100
+    
     for col in df.columns:
         # Lissage de la courbe (shape='spline')
         fig.add_trace(go.Scatter(
@@ -278,6 +306,37 @@ def render_dashboard(df, title_suffix, limit_val):
             hovertemplate='%{y:.1f} dB'
         ))
     
+    # SUPERPOSITION DES ALERTES (Curseurs + Icônes)
+    if df_alerts is not None and not df_alerts.empty and 'createdAt' in df_alerts.columns:
+        # Conversion du timestamp de l'alerte
+        alerts_dt = pd.to_datetime(df_alerts['createdAt'], errors='coerce').dt.tz_localize(None)
+        
+        # Filtre les alertes pour ne garder que celles qui sont dans la fenêtre de temps du graphe actuel
+        mask = (alerts_dt >= df.index.min()) & (alerts_dt <= df.index.max())
+        valid_alerts = df_alerts[mask]
+        valid_alerts_dt = alerts_dt[mask]
+        
+        if not valid_alerts.empty:
+            for idx, row in valid_alerts.iterrows():
+                alert_time = valid_alerts_dt.loc[idx]
+                
+                # Trace le curseur (ligne verticale pointillée rouge)
+                fig.add_vline(x=alert_time, line_width=1.5, line_dash="dot", line_color="rgba(255, 0, 0, 0.6)")
+                
+            # Ajoute les icônes ⚠️ au-dessus avec le texte descriptif au survol (hover)
+            hover_text = valid_alerts.get('type', 'Alert') + "<br>" + valid_alerts.get('deviceEventDescription', '').astype(str)
+            fig.add_trace(go.Scatter(
+                x=valid_alerts_dt,
+                y=[y_max + 3] * len(valid_alerts_dt),  # Positionne l'icône un peu au-dessus du max
+                mode='text',
+                text='⚠️',
+                textfont=dict(size=18),
+                name=t.get("tab_alerts", "Alerts"),
+                hoverinfo='text',
+                hovertext=hover_text,
+                showlegend=False
+            ))
+
     # AJOUT DE LA LIGNE LIMITE SI > 0
     if limit_val > 0:
         fig.add_hline(y=limit_val, line_dash="dash", line_color="#ff6952", annotation_text=f"{limit_val} dB", annotation_position="top left")
@@ -455,12 +514,14 @@ if st.session_state['has_run']:
     else:
         t1, t2, t3, t4 = st.tabs([t["tab_1h"], t["tab_15m"], t["tab_alerts"], t["tab_ai"]])
         
-        with t1: render_dashboard(st.session_state['df_1h'], t["hourly"], limit_db_val)
-        with t2: render_dashboard(st.session_state['df_15m'], t["short"], limit_db_val)
+        # Passage de df_alerts dans la fonction render_dashboard
+        with t1: render_dashboard(st.session_state['df_1h'], st.session_state['df_alerts'], t["hourly"], limit_db_val)
+        with t2: render_dashboard(st.session_state['df_15m'], st.session_state['df_alerts'], t["short"], limit_db_val)
         with t3: render_alerts(st.session_state['df_alerts'])
         with t4: render_chat_agent(api_key, project_id)
 else:
     if lang == 'Français': msg = "👈 Ouvrez les sections de la barre latérale pour configurer et charger les données."
+    elif lang == 'English (US)': msg = "👈 Open the sidebar sections to configure and load data."
     elif lang == 'Español': msg = "👈 Abre las secciones en la barra lateral para configurar y cargar datos."
     else: msg = "👈 Obre les seccions a la barra lateral per configurar i carregar dades."
     st.info(msg)
